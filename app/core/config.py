@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     openrouter_api_key: Optional[str] = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    anthropic_base_url: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
+    deepseek_base_url: Optional[str] = None
+    ollama_base_url: Optional[str] = None
     app_env: str = "development"
     debug: bool = True
 

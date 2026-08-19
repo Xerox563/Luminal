@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.db.init_db import init_db
 from app.api import auth, route, dashboard
 from app.db.base import Base
+from app.services.providers import init_providers
 
 app = FastAPI(
     title="Luminal",
@@ -28,6 +29,7 @@ app.include_router(dashboard.router)
 @app.on_event("startup")
 async def startup():
     await init_db()
+    init_providers()
 
 
 @app.get("/health")
