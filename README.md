@@ -60,7 +60,7 @@ The final product will be a modular, extensible platform that demonstrates moder
 #### Subtasks
 
 1. **Provider Abstraction** – Create adapter interface for LLM providers; implement for OpenAI, Anthropic, DeepSeek, Ollama. ✅
-2. **Enhanced Complexity Detection** – Replace heuristics with a small ML model or LLM‑as‑judge.
+2. **Enhanced Complexity Detection** – Replace heuristics with a small ML model or LLM‑as‑judge. ✅
 3. **Budget Management** – Add user fields: monthly budget, current spend, projected spend; implement monthly reset.
 4. **Budget‑Aware Routing** – Modify router to check budget before selection; force cheaper model if threshold exceeded.
 5. **Redis Caching** – Cache responses for identical prompts (hash) and optionally similar prompts using embeddings.

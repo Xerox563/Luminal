@@ -1,12 +1,47 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime, date, timedelta
+from pydantic import BaseModel, Field
 from app.db.session import get_db
 from app.services.auth import get_current_user
 from app.models import ExecutionLog, User
+from app.services.budget import get_budget_status, update_budget, reset_monthly_budget
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+class BudgetUpdate(BaseModel):
+    monthly_budget: float = Field(..., ge=0)
+
+
+@router.get("/budget")
+async def get_budget(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    return await get_budget_status(db, current_user.id)
+
+
+@router.patch("/budget")
+async def set_budget(
+    budget_data: BudgetUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    user = await update_budget(db, current_user.id, budget_data.monthly_budget)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"monthly_budget": float(user.monthly_budget), "message": "Budget updated"}
+
+
+@router.post("/budget/reset")
+async def reset_budget(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await reset_monthly_budget(db)
+    return {"message": "Monthly budget reset"}
 
 
 @router.get("/stats")
