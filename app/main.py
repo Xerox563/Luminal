@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.init_db import init_db
-from app.api import auth
+from app.api import auth, route
 from app.db.base import Base
 
 app = FastAPI(
@@ -21,6 +21,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(auth.api_key_router)
+app.include_router(route.router)
 
 
 @app.on_event("startup")
