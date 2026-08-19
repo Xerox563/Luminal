@@ -257,7 +257,61 @@ async def get_logs(
             "latency_ms": log.latency_ms,
             "quality_score": float(log.quality_score) if log.quality_score else None,
             "error_message": log.error_message,
+            "retrieval_metadata": log.retrieval_metadata,
+            "tool_metadata": log.tool_metadata,
             "created_at": log.created_at.isoformat()
         }
         for log in logs
     ]
+
+
+@router.get("/rag-stats")
+async def get_rag_stats(
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    rag_result = await db.execute(
+        select(
+            func.count(ExecutionLog.id).filter(ExecutionLog.retrieval_metadata.isnot(None)).label("rag_requests"),
+            func.count(ExecutionLog.id).filter(ExecutionLog.retrieval_metadata.is_(None)).label("non_rag_requests"),
+            func.avg(ExecutionLog.latency_ms).filter(ExecutionLog.retrieval_metadata.isnot(None)).label("rag_avg_latency"),
+            func.avg(ExecutionLog.latency_ms).filter(ExecutionLog.retrieval_metadata.is_(None)).label("non_rag_avg_latency"),
+            func.avg(ExecutionLog.cost).filter(ExecutionLog.retrieval_metadata.isnot(None)).label("rag_avg_cost"),
+            func.avg(ExecutionLog.cost).filter(ExecutionLog.retrieval_metadata.is_(None)).label("non_rag_avg_cost")
+        )
+        .where(ExecutionLog.user_id == current_user.id)
+        .where(ExecutionLog.created_at >= start_date)
+    )
+    rag_stats = rag_result.first()
+    
+    tool_result = await db.execute(
+        select(
+            func.count(ExecutionLog.id).filter(ExecutionLog.tool_metadata.isnot(None)).label("tool_requests"),
+            func.count(ExecutionLog.id).filter(ExecutionLog.tool_metadata.is_(None)).label("non_tool_requests"),
+            func.avg(ExecutionLog.latency_ms).filter(ExecutionLog.tool_metadata.isnot(None)).label("tool_avg_latency")
+        )
+        .where(ExecutionLog.user_id == current_user.id)
+        .where(ExecutionLog.created_at >= start_date)
+    )
+    tool_stats = tool_result.first()
+    
+    return {
+        "rag": {
+            "requests": rag_stats.rag_requests or 0,
+            "non_rag_requests": rag_stats.non_rag_requests or 0,
+            "rag_percentage": round((rag_stats.rag_requests or 0) / max(1, (rag_stats.rag_requests or 0) + (rag_stats.non_rag_requests or 0)) * 100, 2),
+            "avg_latency_ms": float(rag_stats.rag_avg_latency or 0),
+            "non_rag_avg_latency_ms": float(rag_stats.non_rag_avg_latency or 0),
+            "avg_cost": float(rag_stats.rag_avg_cost or 0),
+            "non_rag_avg_cost": float(rag_stats.non_rag_avg_cost or 0)
+        },
+        "tools": {
+            "requests": tool_stats.tool_requests or 0,
+            "non_tool_requests": tool_stats.non_tool_requests or 0,
+            "tool_percentage": round((tool_stats.tool_requests or 0) / max(1, (tool_stats.tool_requests or 0) + (tool_stats.non_tool_requests or 0)) * 100, 2),
+            "avg_latency_ms": float(tool_stats.tool_avg_latency or 0)
+        }
+    }

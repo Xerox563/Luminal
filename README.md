@@ -85,7 +85,7 @@ The final product will be a modular, extensible platform that demonstrates moder
 5. **MCP Client/Server** – Implement MCP server that can register tools (e.g., weather API, database query). ✅
 6. **Tool‑Calling Logic** – Add a decision step (heuristic or LLM) to determine if a tool should be called. ✅
 7. **Tool Execution** – Call the selected tool via MCP, capture result, and merge into prompt.
-8. **Source Citations** – When RAG is used, append citations to the response and log them.
+8. **Source Citations** – When RAG is used, append citations to the response and log them. ✅
 9. **Logging & Dashboard** – Extend `ExecutionLog` to include retrieval and tool metadata; update dashboard.
 10. **Unit Tests** – Test retrieval, tool calling, and context injection.
 
