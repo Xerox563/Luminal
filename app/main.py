@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.init_db import init_db
-from app.api import auth, route, dashboard, documents
+from app.api import auth, route, dashboard, documents, retrieval
 from app.db.base import Base
 from app.services.providers import init_providers
 from app.services.vector_store import init_vector_stores
@@ -26,6 +26,7 @@ app.include_router(auth.api_key_router)
 app.include_router(route.router)
 app.include_router(dashboard.router)
 app.include_router(documents.router)
+app.include_router(retrieval.router)
 
 
 @app.on_event("startup")
