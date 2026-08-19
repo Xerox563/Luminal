@@ -40,7 +40,7 @@ The final product will be a modular, extensible platform that demonstrates moder
 
 #### Subtasks
 
-1. **Project Scaffold** – Initialize repo with FastAPI, Docker, environment config, and folder structure.
+1. **Project Scaffold** – Initialize repo with FastAPI, Docker, environment config, and folder structure. ✅
 2. **Database Models** – Define SQLAlchemy models for `User`, `APIKey`, `ModelConfig`, and `ExecutionLog`.
 3. **User & API Key Management** – Implement registration, login, and CRUD endpoints for API keys.
 4. **POST /route Endpoint** – Accept user prompt and API key; validate key.
