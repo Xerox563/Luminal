@@ -78,7 +78,7 @@ The final product will be a modular, extensible platform that demonstrates moder
 
 #### Subtasks
 
-1. **Vector Database Setup** – Integrate Chroma (dev) and configurable Pinecone/Weaviate (prod) with embedding model.
+1. **Vector Database Setup** – Integrate Chroma (dev) and configurable Pinecone/Weaviate (prod) with embedding model. ✅
 2. **Document Ingestion** – Create endpoints/scripts to upload files, chunk text, embed, and store vectors.
 3. **Retrieval Module** – Build function that takes a query and returns top‑k relevant chunks with scores.
 4. **Context Injection** – In `/route`, detect if query needs external knowledge; if yes, retrieve and prepend to prompt.
