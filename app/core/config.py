@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     deepseek_api_key: Optional[str] = None
     deepseek_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
+    use_llm_complexity: bool = False
     app_env: str = "development"
     debug: bool = True
 
