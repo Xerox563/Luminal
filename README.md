@@ -84,10 +84,10 @@ The final product will be a modular, extensible platform that demonstrates moder
 4. **Context Injection** – In `/route`, detect if query needs external knowledge; if yes, retrieve and prepend to prompt. ✅
 5. **MCP Client/Server** – Implement MCP server that can register tools (e.g., weather API, database query). ✅
 6. **Tool‑Calling Logic** – Add a decision step (heuristic or LLM) to determine if a tool should be called. ✅
-7. **Tool Execution** – Call the selected tool via MCP, capture result, and merge into prompt.
+7. **Tool Execution** – Call the selected tool via MCP, capture result, and merge into prompt. ✅
 8. **Source Citations** – When RAG is used, append citations to the response and log them. ✅
 9. **Logging & Dashboard** – Extend `ExecutionLog` to include retrieval and tool metadata; update dashboard. ✅
-10. **Unit Tests** – Test retrieval, tool calling, and context injection.
+10. **Unit Tests** – Test retrieval, tool calling, and context injection. ✅
 
 ---
 
@@ -97,16 +97,16 @@ The final product will be a modular, extensible platform that demonstrates moder
 
 #### Subtasks
 
-1. **LangGraph State Machine** – Refactor routing pipeline into LangGraph nodes: `analyze` → `retrieve` → `tool` → `route` → `generate`.
-2. **Conversation State** – Persist conversation history and context across multiple turns (session management).
-3. **Critic Agent** – Add a node that reviews the generated response and scores quality; if low, re‑generate with stronger model.
-4. **Human‑in‑the‑Loop** – For high‑risk tool actions (e.g., refund, email), pause and ask for user approval via callback.
-5. **Error Recovery** – On tool failure or low confidence, loop back to previous nodes with different parameters.
-6. **Tracing** – Integrate LangSmith or OpenTelemetry to log agent decisions and state transitions.
-7. **Router Integration** – Make routing decision consider agent state (e.g., previous failures, quality history).
-8. **Integration Tests** – Test multi‑step agent workflows, critic loops, and approval flows.
-9. **Dashboard Update** – Show agent decision trace and loop counts.
-10. **Performance Optimisation** – Cache intermediate agent results to reduce latency.
+1. **LangGraph State Machine** – Refactor routing pipeline into LangGraph nodes: `analyze` → `retrieve` → `tool` → `route` → `generate`. ✅
+2. **Conversation State** – Persist conversation history and context across multiple turns (session management). ✅
+3. **Critic Agent** – Add a node that reviews the generated response and scores quality; if low, re‑generate with stronger model. ✅
+4. **Human‑in‑the‑Loop** – For high‑risk tool actions (e.g., refund, email), pause and ask for user approval via callback. ✅
+5. **Error Recovery** – On tool failure or low confidence, loop back to previous nodes with different parameters. ✅
+6. **Tracing** – Integrate LangSmith or OpenTelemetry to log agent decisions and state transitions. ✅
+7. **Router Integration** – Make routing decision consider agent state (e.g., previous failures, quality history). ✅
+8. **Integration Tests** – Test multi‑step agent workflows, critic loops, and approval flows. ✅
+9. **Dashboard Update** – Show agent decision trace and loop counts. ✅
+10. **Performance Optimisation** – Cache intermediate agent results to reduce latency. ✅
 
 ---
 
