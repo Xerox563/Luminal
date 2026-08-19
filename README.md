@@ -66,7 +66,7 @@ The final product will be a modular, extensible platform that demonstrates moder
 5. **Redis Caching** – Cache responses for identical prompts (hash) and optionally similar prompts using embeddings. ✅
 6. **Retry & Fallback** – On failure, retry with exponential backoff; if still fails, try a fallback model. ✅
 7. **Streaming Support** – Add Server‑Sent Events (SSE) endpoint for streaming token responses. ✅
-8. **Rate Limiting** – Implement Redis‑based rate limiting per API key.
+8. **Rate Limiting** – Implement Redis‑based rate limiting per API key. ✅
 9. **Dashboard Expansion** – Show cost breakdown by model, budget status, and monthly trends.
 10. **Integration Tests** – Test multi‑provider routing, budget enforcement, and caching.
 

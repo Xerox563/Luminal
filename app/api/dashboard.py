@@ -115,6 +115,121 @@ async def get_dashboard_stats(
     }
 
 
+@router.get("/cost-breakdown")
+async def get_cost_breakdown(
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    daily_result = await db.execute(
+        select(
+            func.date(ExecutionLog.created_at).label("date"),
+            func.count(ExecutionLog.id).label("requests"),
+            func.coalesce(func.sum(ExecutionLog.cost), 0).label("cost"),
+            func.coalesce(func.sum(ExecutionLog.total_tokens), 0).label("tokens")
+        )
+        .where(ExecutionLog.user_id == current_user.id)
+        .where(ExecutionLog.created_at >= start_date)
+        .group_by(func.date(ExecutionLog.created_at))
+        .order_by(func.date(ExecutionLog.created_at))
+    )
+    daily_stats = daily_result.all()
+    
+    complexity_result = await db.execute(
+        select(
+            ExecutionLog.complexity,
+            func.count(ExecutionLog.id).label("requests"),
+            func.coalesce(func.sum(ExecutionLog.cost), 0).label("cost"),
+            func.coalesce(func.avg(ExecutionLog.latency_ms), 0).label("avg_latency")
+        )
+        .where(ExecutionLog.user_id == current_user.id)
+        .where(ExecutionLog.created_at >= start_date)
+        .group_by(ExecutionLog.complexity)
+    )
+    complexity_stats = complexity_result.all()
+    
+    provider_result = await db.execute(
+        select(
+            ExecutionLog.provider,
+            func.count(ExecutionLog.id).label("requests"),
+            func.coalesce(func.sum(ExecutionLog.cost), 0).label("cost")
+        )
+        .where(ExecutionLog.user_id == current_user.id)
+        .where(ExecutionLog.created_at >= start_date)
+        .group_by(ExecutionLog.provider)
+    )
+    provider_stats = provider_result.all()
+    
+    return {
+        "daily": [
+            {
+                "date": d.date.isoformat(),
+                "requests": d.requests,
+                "cost": float(d.cost),
+                "tokens": d.tokens
+            }
+            for d in daily_stats
+        ],
+        "by_complexity": [
+            {
+                "complexity": c.complexity.value if c.complexity else "unknown",
+                "requests": c.requests,
+                "cost": float(c.cost),
+                "avg_latency_ms": float(c.avg_latency)
+            }
+            for c in complexity_stats
+        ],
+        "by_provider": [
+            {
+                "provider": p.provider,
+                "requests": p.requests,
+                "cost": float(p.cost)
+            }
+            for p in provider_stats
+        ]
+    }
+
+
+@router.get("/model-performance")
+async def get_model_performance(
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    result = await db.execute(
+        select(
+            ExecutionLog.model_used,
+            func.count(ExecutionLog.id).label("requests"),
+            func.coalesce(func.sum(ExecutionLog.cost), 0).label("cost"),
+            func.coalesce(func.sum(ExecutionLog.total_tokens), 0).label("tokens"),
+            func.coalesce(func.avg(ExecutionLog.latency_ms), 0).label("avg_latency"),
+            func.coalesce(func.avg(ExecutionLog.quality_score), 0).label("avg_quality"),
+            func.count(ExecutionLog.id).filter(ExecutionLog.error_message.isnot(None)).label("errors")
+        )
+        .where(ExecutionLog.user_id == current_user.id)
+        .where(ExecutionLog.created_at >= start_date)
+        .group_by(ExecutionLog.model_used)
+    )
+    stats = result.all()
+    
+    return [
+        {
+            "model": s.model_used,
+            "requests": s.requests,
+            "cost": float(s.cost),
+            "tokens": s.tokens,
+            "avg_latency_ms": float(s.avg_latency),
+            "avg_quality_score": float(s.avg_quality) if s.avg_quality else None,
+            "error_rate": round(s.errors / s.requests * 100, 2) if s.requests > 0 else 0
+        }
+        for s in stats
+    ]
+
+
 @router.get("/logs")
 async def get_logs(
     limit: int = 50,
