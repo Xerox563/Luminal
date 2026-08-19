@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
@@ -8,17 +8,34 @@ from app.services.openrouter import call_openrouter, calculate_cost
 from app.services.budget import add_spend, get_budget_status
 from app.services.cache import generate_cache_key, get_cached_response, set_cached_response
 from app.services.retry import execute_with_fallback
+from app.services.rate_limit import check_rate_limit
 from app.services.providers import ProviderRegistry
 from app.models import ExecutionLog, User
 from app.schemas.route import RouteRequest, RouteResponse
 
 router = APIRouter(prefix="/route", tags=["route"])
 
+RATE_LIMIT_REQUESTS = 60
+RATE_LIMIT_WINDOW = 60
+
+
+async def check_rate_limit_dependency(request: Request, api_key: str):
+    key = f"rate_limit:{api_key}"
+    allowed, used, limit = await check_rate_limit(key, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"X-RateLimit-Limit": str(limit), "X-RateLimit-Remaining": "0"}
+        )
+    return {"limit": limit, "remaining": limit - used}
+
 
 @router.post("", response_model=RouteResponse)
 async def route_prompt(
     request: RouteRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    rate_limit: dict = Depends(check_rate_limit_dependency)
 ):
     user = await get_current_user_from_api_key(request.api_key, db)
     
@@ -133,7 +150,8 @@ async def route_prompt(
 @router.post("/stream")
 async def route_prompt_stream(
     request: RouteRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    rate_limit: dict = Depends(check_rate_limit_dependency)
 ):
     user = await get_current_user_from_api_key(request.api_key, db)
     
