@@ -48,8 +48,8 @@ The final product will be a modular, extensible platform that demonstrates moder
 6. **Router Logic** – Read user’s model mapping (complexity → model name) from DB and choose model. ✅
 7. **OpenRouter Client** – Integrate HTTP client to call OpenRouter with selected model; parse response. ✅
 8. **Logging** – Save every request to `ExecutionLog` with prompt, model, tokens, cost, latency, timestamp. ✅
-9. **Simple Dashboard** – Backend APIs for today’s cost/requests and a minimal Next.js page to display them.
-10. **Tests** – Unit tests for complexity scorer, router, and logging.
+9. **Simple Dashboard** – Backend APIs for today’s cost/requests and a minimal Next.js page to display them. ✅
+10. **Tests** – Unit tests for complexity scorer, router, and logging. ✅
 
 ---
 
