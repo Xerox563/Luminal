@@ -9,6 +9,7 @@ from app.services.budget import add_spend, get_budget_status
 from app.services.cache import generate_cache_key, get_cached_response, set_cached_response
 from app.services.retry import execute_with_fallback
 from app.services.rate_limit import check_rate_limit
+from app.services.rag import inject_context
 from app.services.providers import ProviderRegistry
 from app.models import ExecutionLog, User
 from app.schemas.route import RouteRequest, RouteResponse
@@ -45,7 +46,9 @@ async def route_prompt(
     
     model_config, complexity = await route_request(db, user.id, request.prompt)
     
-    messages = [{"role": "user", "content": request.prompt}]
+    rag_result = await inject_context(request.prompt, user.id)
+    
+    messages = [{"role": "user", "content": rag_result.augmented_prompt}]
     
     cache_key = generate_cache_key(
         request.prompt,
@@ -66,7 +69,8 @@ async def route_prompt(
             completion_tokens=cached["completion_tokens"],
             total_tokens=cached["total_tokens"],
             cost=cached["cost"],
-            latency_ms=0
+            latency_ms=0,
+            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
         )
         db.add(log)
         await add_spend(db, user.id, cached["cost"])
@@ -116,7 +120,8 @@ async def route_prompt(
             completion_tokens=result["completion_tokens"],
             total_tokens=result["total_tokens"],
             cost=cost,
-            latency_ms=result["latency_ms"]
+            latency_ms=result["latency_ms"],
+            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
         )
         db.add(log)
         
@@ -139,7 +144,8 @@ async def route_prompt(
             model_used=model_config.model_name,
             provider=model_config.provider,
             complexity=complexity,
-            error_message=str(e)
+            error_message=str(e),
+            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
         )
         db.add(log)
         await db.commit()
@@ -161,7 +167,9 @@ async def route_prompt_stream(
     
     model_config, complexity = await route_request(db, user.id, request.prompt)
     
-    messages = [{"role": "user", "content": request.prompt}]
+    rag_result = await inject_context(request.prompt, user.id)
+    
+    messages = [{"role": "user", "content": rag_result.augmented_prompt}]
     
     provider_obj = ProviderRegistry.get(model_config.provider)
     if not provider_obj:
@@ -196,7 +204,8 @@ async def route_prompt_stream(
                 completion_tokens=int(len(full_content.split()) * 1.3),
                 total_tokens=prompt_tokens + int(len(full_content.split()) * 1.3),
                 cost=cost,
-                latency_ms=0
+                latency_ms=0,
+                retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
             )
             db.add(log)
             await add_spend(db, user.id, cost)

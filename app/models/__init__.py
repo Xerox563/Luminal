@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text, Numeric, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text, Numeric, Boolean, JSON
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
@@ -76,6 +76,8 @@ class ExecutionLog(Base):
     latency_ms = Column(Integer, default=0)
     quality_score = Column(Numeric(3, 2), nullable=True)
     error_message = Column(Text, nullable=True)
+    retrieval_metadata = Column(JSON, nullable=True)
+    tool_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     user = relationship("User", back_populates="execution_logs")
