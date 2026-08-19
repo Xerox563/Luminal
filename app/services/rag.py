@@ -25,6 +25,7 @@ class RAGResult:
     retrieved_chunks: List[DocumentChunk]
     citations: List[dict]
     used_rag: bool
+    citation_text: str = ""
 
 
 async def inject_context(
@@ -37,7 +38,8 @@ async def inject_context(
             augmented_prompt=prompt,
             retrieved_chunks=[],
             citations=[],
-            used_rag=False
+            used_rag=False,
+            citation_text=""
         )
     
     retrieval_result = await retrieve_for_rag(
@@ -52,7 +54,8 @@ async def inject_context(
             augmented_prompt=prompt,
             retrieved_chunks=[],
             citations=[],
-            used_rag=False
+            used_rag=False,
+            citation_text=""
         )
     
     context_parts = []
@@ -73,6 +76,13 @@ async def inject_context(
             "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
         })
     
+    citation_text = ""
+    if citations:
+        citation_lines = ["\n\nSources:"]
+        for c in citations:
+            citation_lines.append(f"[{c['index']}] {c['filename']} (chunk {c['chunk_index']}, relevance: {c['score']:.2f})")
+        citation_text = "\n".join(citation_lines)
+    
     if context_parts:
         context = "\n".join(context_parts)
         augmented_prompt = f"""Use the following context to answer the question. If the context doesn't contain relevant information, answer based on your knowledge.
@@ -90,5 +100,12 @@ Answer:"""
         augmented_prompt=augmented_prompt,
         retrieved_chunks=retrieval_result.chunks,
         citations=citations,
-        used_rag=bool(context_parts)
+        used_rag=bool(context_parts),
+        citation_text=citation_text
     )
+
+
+def format_response_with_citations(content: str, citation_text: str) -> str:
+    if not citation_text:
+        return content
+    return content + citation_text

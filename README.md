@@ -83,7 +83,7 @@ The final product will be a modular, extensible platform that demonstrates moder
 3. **Retrieval Module** – Build function that takes a query and returns top‑k relevant chunks with scores. ✅
 4. **Context Injection** – In `/route`, detect if query needs external knowledge; if yes, retrieve and prepend to prompt. ✅
 5. **MCP Client/Server** – Implement MCP server that can register tools (e.g., weather API, database query). ✅
-6. **Tool‑Calling Logic** – Add a decision step (heuristic or LLM) to determine if a tool should be called.
+6. **Tool‑Calling Logic** – Add a decision step (heuristic or LLM) to determine if a tool should be called. ✅
 7. **Tool Execution** – Call the selected tool via MCP, capture result, and merge into prompt.
 8. **Source Citations** – When RAG is used, append citations to the response and log them.
 9. **Logging & Dashboard** – Extend `ExecutionLog` to include retrieval and tool metadata; update dashboard.

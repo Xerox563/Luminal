@@ -9,7 +9,7 @@ from app.services.budget import add_spend, get_budget_status
 from app.services.cache import generate_cache_key, get_cached_response, set_cached_response
 from app.services.retry import execute_with_fallback
 from app.services.rate_limit import check_rate_limit
-from app.services.rag import inject_context
+from app.services.rag import inject_context, format_response_with_citations
 from app.services.tool_calling import decide_tool_call, decide_tool_call_llm
 from app.services.tool_execution import process_tool_calls, format_tool_results
 from app.services.providers import ProviderRegistry
@@ -89,8 +89,10 @@ async def route_prompt(
         await add_spend(db, user.id, cached["cost"])
         await db.commit()
         
+        content_with_citations = format_response_with_citations(cached["content"], rag_result.citation_text)
+        
         return RouteResponse(
-            content=cached["content"],
+            content=content_with_citations,
             model=model_config.model_name,
             complexity=complexity.value,
             tokens_used=cached["total_tokens"],
@@ -142,8 +144,10 @@ async def route_prompt(
         await add_spend(db, user.id, cost)
         await db.commit()
         
+        content_with_citations = format_response_with_citations(result["content"], rag_result.citation_text)
+        
         return RouteResponse(
-            content=result["content"],
+            content=content_with_citations,
             model=model_config.model_name,
             complexity=complexity.value,
             tokens_used=result["total_tokens"],
