@@ -6,6 +6,7 @@ from app.services.router import route_request
 from app.services.openrouter import call_openrouter, calculate_cost
 from app.services.budget import add_spend, get_budget_status
 from app.services.cache import generate_cache_key, get_cached_response, set_cached_response
+from app.services.retry import execute_with_fallback
 from app.models import ExecutionLog, User
 from app.schemas.route import RouteRequest, RouteResponse
 
@@ -62,32 +63,20 @@ async def route_prompt(
         )
     
     try:
-        provider = model_config.provider
-        if provider == "openrouter":
-            result = await call_openrouter(
-                model=model_config.model_name,
-                messages=messages,
-                max_tokens=model_config.max_tokens,
-                temperature=float(model_config.temperature)
-            )
-        else:
-            from app.services.providers import ProviderRegistry
-            provider_obj = ProviderRegistry.get_for_model(model_config.model_name)
-            if not provider_obj:
-                provider_obj = ProviderRegistry.get("openrouter")
-            result = await provider_obj.chat_completion(
-                model=model_config.model_name,
-                messages=messages,
-                max_tokens=model_config.max_tokens,
-                temperature=float(model_config.temperature)
-            )
+        result = await execute_with_fallback(
+            db,
+            user.id,
+            request.prompt,
+            model_config,
+            messages,
+            model_config.max_tokens,
+            float(model_config.temperature)
+        )
         
-        if provider == "openrouter":
-            cost = calculate_cost(model_config.model_name, result["prompt_tokens"], result["completion_tokens"])
-        else:
-            from app.services.providers import ProviderRegistry
+        provider_obj = ProviderRegistry.get(model_config.provider)
+        if not provider_obj:
             provider_obj = ProviderRegistry.get_for_model(model_config.model_name)
-            cost = provider_obj.calculate_cost(model_config.model_name, result["prompt_tokens"], result["completion_tokens"])
+        cost = provider_obj.calculate_cost(model_config.model_name, result["prompt_tokens"], result["completion_tokens"])
         
         cache_data = {
             "content": result["content"],
@@ -137,3 +126,6 @@ async def route_prompt(
         await db.commit()
         
         raise HTTPException(status_code=500, detail=f"Model call failed: {str(e)}")
+
+
+from app.services.providers import ProviderRegistry
