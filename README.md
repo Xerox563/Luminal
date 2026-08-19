@@ -43,11 +43,11 @@ The final product will be a modular, extensible platform that demonstrates moder
 1. **Project Scaffold** – Initialize repo with FastAPI, Docker, environment config, and folder structure. ✅
 2. **Database Models** – Define SQLAlchemy models for `User`, `APIKey`, `ModelConfig`, and `ExecutionLog`. ✅
 3. **User & API Key Management** – Implement registration, login, and CRUD endpoints for API keys. ✅
-4. **POST /route Endpoint** – Accept user prompt and API key; validate key.
+4. **POST /route Endpoint** – Accept user prompt and API key; validate key. ✅
 5. **Basic Complexity Scorer** – Use heuristic scoring (prompt length, keywords, question type) to classify low/medium/high. ✅
 6. **Router Logic** – Read user’s model mapping (complexity → model name) from DB and choose model. ✅
 7. **OpenRouter Client** – Integrate HTTP client to call OpenRouter with selected model; parse response. ✅
-8. **Logging** – Save every request to `ExecutionLog` with prompt, model, tokens, cost, latency, timestamp.
+8. **Logging** – Save every request to `ExecutionLog` with prompt, model, tokens, cost, latency, timestamp. ✅
 9. **Simple Dashboard** – Backend APIs for today’s cost/requests and a minimal Next.js page to display them.
 10. **Tests** – Unit tests for complexity scorer, router, and logging.
 
