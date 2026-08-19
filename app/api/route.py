@@ -10,6 +10,8 @@ from app.services.cache import generate_cache_key, get_cached_response, set_cach
 from app.services.retry import execute_with_fallback
 from app.services.rate_limit import check_rate_limit
 from app.services.rag import inject_context
+from app.services.tool_calling import decide_tool_call, decide_tool_call_llm
+from app.services.tool_execution import process_tool_calls, format_tool_results
 from app.services.providers import ProviderRegistry
 from app.models import ExecutionLog, User
 from app.schemas.route import RouteRequest, RouteResponse
@@ -48,7 +50,17 @@ async def route_prompt(
     
     rag_result = await inject_context(request.prompt, user.id)
     
-    messages = [{"role": "user", "content": rag_result.augmented_prompt}]
+    tool_results = await process_tool_calls(request.prompt, use_llm=settings.use_llm_complexity)
+    tool_context = format_tool_results(tool_results)
+    
+    augmented_prompt = rag_result.augmented_prompt
+    if tool_context:
+        augmented_prompt = augmented_prompt.replace(
+            "Question: " + request.prompt,
+            "Question: " + request.prompt + tool_context
+        )
+    
+    messages = [{"role": "user", "content": augmented_prompt}]
     
     cache_key = generate_cache_key(
         request.prompt,
@@ -70,7 +82,8 @@ async def route_prompt(
             total_tokens=cached["total_tokens"],
             cost=cached["cost"],
             latency_ms=0,
-            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
+            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None,
+            tool_metadata={"tool_calls": [{"tool": r.tool_name, "success": r.success, "result": r.result, "error": r.error} for r in tool_results]} if tool_results else None
         )
         db.add(log)
         await add_spend(db, user.id, cached["cost"])
@@ -121,7 +134,8 @@ async def route_prompt(
             total_tokens=result["total_tokens"],
             cost=cost,
             latency_ms=result["latency_ms"],
-            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
+            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None,
+            tool_metadata={"tool_calls": [{"tool": r.tool_name, "success": r.success, "result": r.result, "error": r.error} for r in tool_results]} if tool_results else None
         )
         db.add(log)
         
@@ -145,7 +159,8 @@ async def route_prompt(
             provider=model_config.provider,
             complexity=complexity,
             error_message=str(e),
-            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
+            retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None,
+            tool_metadata={"tool_calls": [{"tool": r.tool_name, "success": r.success, "result": r.result, "error": r.error} for r in tool_results]} if tool_results else None
         )
         db.add(log)
         await db.commit()
@@ -169,7 +184,17 @@ async def route_prompt_stream(
     
     rag_result = await inject_context(request.prompt, user.id)
     
-    messages = [{"role": "user", "content": rag_result.augmented_prompt}]
+    tool_results = await process_tool_calls(request.prompt, use_llm=settings.use_llm_complexity)
+    tool_context = format_tool_results(tool_results)
+    
+    augmented_prompt = rag_result.augmented_prompt
+    if tool_context:
+        augmented_prompt = augmented_prompt.replace(
+            "Question: " + request.prompt,
+            "Question: " + request.prompt + tool_context
+        )
+    
+    messages = [{"role": "user", "content": augmented_prompt}]
     
     provider_obj = ProviderRegistry.get(model_config.provider)
     if not provider_obj:
@@ -205,7 +230,8 @@ async def route_prompt_stream(
                 total_tokens=prompt_tokens + int(len(full_content.split()) * 1.3),
                 cost=cost,
                 latency_ms=0,
-                retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None
+                retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None,
+                tool_metadata={"tool_calls": [{"tool": r.tool_name, "success": r.success, "result": r.result, "error": r.error} for r in tool_results]} if tool_results else None
             )
             db.add(log)
             await add_spend(db, user.id, cost)
