@@ -17,6 +17,18 @@ services:
     volumes:
       - .:/app
 
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules
+
   db:
     image: postgres:16-alpine
     environment:
