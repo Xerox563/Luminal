@@ -5,6 +5,7 @@ from app.db.init_db import init_db
 from app.api import auth, route, dashboard
 from app.db.base import Base
 from app.services.providers import init_providers
+from app.services.vector_store import init_vector_stores
 
 app = FastAPI(
     title="Luminal",
@@ -30,6 +31,7 @@ app.include_router(dashboard.router)
 async def startup():
     await init_db()
     init_providers()
+    init_vector_stores()
 
 
 @app.get("/health")

@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     deepseek_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
     use_llm_complexity: bool = False
+    chroma_host: Optional[str] = None
+    chroma_port: Optional[int] = None
+    pinecone_api_key: Optional[str] = None
+    pinecone_index: Optional[str] = None
+    weaviate_url: Optional[str] = None
+    weaviate_api_key: Optional[str] = None
+    embedding_dimension: int = 384
+    vector_store: str = "chroma"
     app_env: str = "development"
     debug: bool = True
 
