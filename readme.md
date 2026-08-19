@@ -1,0 +1,1 @@
+# Luminal is an intelligent routing system for Large Language Model (LLM) requests. Instead of always using the most expensive or powerful model, the gateway analyzes each prompt, considers the user's budget, retrieves relevant context (RAG), and can call external tools (MCP) before deciding which model to use. T
