@@ -15,6 +15,7 @@ class RouteResponse(BaseModel):
     tokens_used: int
     cost: float
     latency_ms: int
+    session_id: str
 
 
 class LogResponse(BaseModel):
