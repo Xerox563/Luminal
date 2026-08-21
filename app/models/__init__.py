@@ -102,8 +102,11 @@ class ExecutionLog(Base):
     latency_ms = Column(Integer, default=0)
     quality_score = Column(Numeric(3, 2), nullable=True)
     error_message = Column(Text, nullable=True)
-    retrieval_metadata = Column(JSON, nullable=True)
-    tool_metadata = Column(JSON, nullable=True)
+    # none_as_null=True: without it, SQLAlchemy stores an unset Python None as
+    # the JSON text "null" instead of SQL NULL, so "IS NOT NULL" filters (used
+    # by /dashboard/rag-stats to detect RAG/tool usage) match every row.
+    retrieval_metadata = Column(JSON(none_as_null=True), nullable=True)
+    tool_metadata = Column(JSON(none_as_null=True), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     user = relationship("User", back_populates="execution_logs")
