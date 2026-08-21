@@ -4,6 +4,7 @@ from typing import Optional
 import json
 import traceback
 import logging
+from datetime import datetime
 from app.db.session import get_db
 from app.services.auth import get_current_user
 from app.services.ingestion import ingest_document
@@ -74,12 +75,30 @@ async def get_document(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    return DocumentInfo(
-        document_id=document_id,
-        filename="unknown",
-        chunks_count=0,
-        created_at=datetime.utcnow()
-    )
+    vector_store = VectorStoreRegistry.get(settings.vector_store)
+    if not vector_store:
+        vector_store = VectorStoreRegistry.get_default()
+
+    if vector_store:
+        docs = await vector_store.list_documents(current_user.id)
+        for doc in docs:
+            if doc.get("id") == document_id or doc.get("filename") == document_id:
+                created_at = doc.get("created_at")
+                if isinstance(created_at, str) and created_at:
+                    try:
+                        created_at = datetime.fromisoformat(created_at)
+                    except Exception:
+                        created_at = datetime.utcnow()
+                elif not created_at:
+                    created_at = datetime.utcnow()
+                return DocumentInfo(
+                    document_id=doc.get("id", document_id),
+                    filename=doc.get("filename", document_id),
+                    chunks_count=doc.get("chunks_count", 0),
+                    created_at=created_at
+                )
+    
+    raise HTTPException(status_code=404, detail="Document not found")
 
 
 @router.delete("/{document_id}")
@@ -112,6 +131,3 @@ async def delete_documents_batch(
         await vector_store.delete(request.document_ids)
 
     return {"message": f"Deleted {len(request.document_ids)} documents"}
-
-
-from datetime import datetime
