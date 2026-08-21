@@ -92,6 +92,9 @@ class WeaviateVectorStore(VectorStore):
             self.client.data_object.delete(uuid=id, class_name=self.class_name)
         return True
 
+    async def list_documents(self, user_id: int) -> list[dict]:
+        return []
+
     async def get_collection_stats(self) -> dict:
         if not self.client:
             await self.initialize()

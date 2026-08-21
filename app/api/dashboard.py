@@ -18,6 +18,8 @@ from app.services.mcp_tool import (
 from app.services.model_config import (
     create_model_config, get_model_configs, get_model_config, update_model_config, delete_model_config
 )
+from app.services.vector_store.base import VectorStoreRegistry
+from app.core.config import settings
 from app.schemas.provider_key import ProviderKeyCreate, ProviderKeyUpdate, ProviderKeyResponse, ProviderKeyListResponse
 from app.schemas.mcp_tool import MCPToolCreate, MCPToolUpdate, MCPToolResponse, MCPToolListResponse
 from app.schemas.model_config import ModelConfigCreate, ModelConfigUpdate, ModelConfigResponse, ModelConfigListResponse
@@ -547,6 +549,18 @@ async def get_rag_stats(
             "avg_latency_ms": float(tool_stats.tool_avg_latency or 0)
         }
     }
+
+
+@router.get("/documents")
+async def list_documents(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    vector_store = VectorStoreRegistry.get(settings.vector_store) or VectorStoreRegistry.get_default()
+    if not vector_store:
+        return {"documents": [], "total": 0}
+    docs = await vector_store.list_documents(current_user.id)
+    return {"documents": docs, "total": len(docs)}
 
 
 # Model Config endpoints

@@ -75,6 +75,9 @@ class PineconeVectorStore(VectorStore):
         self.index.delete(ids=ids)
         return True
 
+    async def list_documents(self, user_id: int) -> list[dict]:
+        return []
+
     async def get_collection_stats(self) -> dict:
         if not self.index:
             await self.initialize()

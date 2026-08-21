@@ -77,6 +77,30 @@ class ChromaVectorStore(VectorStore):
         self.collection.delete(ids=ids)
         return True
 
+    async def list_documents(self, user_id: int) -> list[dict]:
+        if not self.collection:
+            await self.initialize()
+        try:
+            results = self.collection.get(
+                where={"user_id": user_id},
+                include=["metadatas"]
+            )
+        except Exception:
+            return []
+        docs_map: dict[str, dict] = {}
+        for i, doc_id in enumerate(results["ids"]):
+            meta = results["metadatas"][i] if results["metadatas"] else {}
+            filename = meta.get("filename", "unknown")
+            if filename not in docs_map:
+                docs_map[filename] = {
+                    "id": filename,
+                    "filename": filename,
+                    "chunks_count": 0,
+                    "created_at": meta.get("created_at", ""),
+                }
+            docs_map[filename]["chunks_count"] += 1
+        return list(docs_map.values())
+
     async def get_collection_stats(self) -> dict:
         if not self.collection:
             await self.initialize()

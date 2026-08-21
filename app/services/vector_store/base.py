@@ -40,6 +40,10 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
+    async def list_documents(self, user_id: int) -> list[dict]:
+        pass
+
+    @abstractmethod
     async def get_collection_stats(self) -> dict:
         pass
 
