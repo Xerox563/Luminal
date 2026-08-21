@@ -48,7 +48,7 @@ async def run_agent(
     user_id: int,
     prompt: str,
     config: Optional[Dict] = None
-) -> AgentState:
+) -> Dict[str, Any]:
     from datetime import datetime
     initial_state = AgentState(
         session_id=session_id,
@@ -60,37 +60,51 @@ async def run_agent(
     if config:
         thread_config.update(config)
     
+    completed_at = datetime.utcnow()
+    
+    def to_dict(o: Any) -> Dict[str, Any]:
+        if hasattr(o, "to_dict"):
+            return o.to_dict()
+        if isinstance(o, dict):
+            return dict(o)
+        return {k: getattr(o, k) for k in o.__dataclass_fields__.keys()}
+    
     try:
-        result = await asyncio.wait_for(
+        result_raw = await asyncio.wait_for(
             app.ainvoke(initial_state, config=thread_config),
             timeout=AGENT_TIMEOUT
         )
-        result.completed_at = datetime.utcnow()
-        await app.aupdate_state(thread_config, {"completed_at": result.completed_at})
+        result = to_dict(result_raw)
+        result["completed_at"] = completed_at.isoformat()
+        
+        try:
+            await app.aupdate_state(thread_config, {"completed_at": completed_at})
+        except Exception:
+            pass
     except asyncio.TimeoutError:
-        initial_state.completed_at = datetime.utcnow()
-        initial_state.error = "Request timed out. Check your API key and try again."
+        result = to_dict(initial_state)
+        result["error"] = "Request timed out. Check your API key and try again."
+        result["completed_at"] = completed_at.isoformat()
         try:
             await app.aupdate_state(thread_config, {
-                "completed_at": initial_state.completed_at,
-                "error": initial_state.error,
-                "trace": initial_state.trace
+                "completed_at": completed_at,
+                "error": result["error"],
+                "trace": initial_state.trace,
             })
         except Exception:
             pass
-        return initial_state
     except Exception as e:
-        initial_state.completed_at = datetime.utcnow()
-        initial_state.error = str(e)
+        result = to_dict(initial_state)
+        result["error"] = str(e)
+        result["completed_at"] = completed_at.isoformat()
         try:
             await app.aupdate_state(thread_config, {
-                "completed_at": initial_state.completed_at,
-                "error": initial_state.error,
-                "trace": initial_state.trace
+                "completed_at": completed_at,
+                "error": result["error"],
+                "trace": initial_state.trace,
             })
         except Exception:
             pass
-        return initial_state
     
     return result
 
@@ -115,21 +129,42 @@ async def run_agent_stream(
         yield event
 
 
-async def get_agent_state(session_id: str) -> Optional[AgentState]:
+async def get_agent_state(session_id: str) -> Optional[Dict[str, Any]]:
     thread_config = {"configurable": {"thread_id": session_id}}
     try:
         state = await app.aget_state(thread_config)
-        return state.values if state else None
+        if not state or not state.values:
+            return None
+        vals = state.values
+        if isinstance(vals, dict):
+            return vals
+        if hasattr(vals, "to_dict"):
+            return vals.to_dict()
+        return {k: getattr(vals, k) for k in vals.__dataclass_fields__.keys()}
     except Exception:
         return None
 
 
-async def resume_agent(session_id: str, approval_granted: bool) -> AgentState:
+async def resume_agent(session_id: str, approval_granted: bool) -> Optional[Dict[str, Any]]:
+    from datetime import datetime
     thread_config = {"configurable": {"thread_id": session_id}}
     state = await app.aget_state(thread_config)
-    if state and state.values:
-        state.values.approval_granted = approval_granted
-        state.values.approval_required = False
-        result = await app.ainvoke(state.values, config=thread_config)
+    if not state or not state.values:
+        return None
+    vals = state.values
+    if isinstance(vals, dict):
+        vals["approval_granted"] = approval_granted
+        vals["approval_required"] = False
+    else:
+        vals.approval_granted = approval_granted
+        vals.approval_required = False
+    result = await app.ainvoke(vals, config=thread_config)
+    completed_at = datetime.utcnow()
+    if isinstance(result, dict):
+        result["completed_at"] = completed_at.isoformat()
         return result
-    return None
+    if hasattr(result, "to_dict"):
+        d = result.to_dict()
+        d["completed_at"] = completed_at.isoformat()
+        return d
+    return {k: getattr(result, k) for k in result.__dataclass_fields__.keys()}
