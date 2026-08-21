@@ -32,6 +32,22 @@ export const shortModel = (m: string) => {
   return parts.length > 1 ? parts.slice(1).join("/") : m;
 };
 
+export function jwtSubject(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.sub ? String(payload.sub) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function newSessionId(token: string): string | null {
+  const sub = jwtSubject(token);
+  if (!sub) return null;
+  const rand = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  return `user_${sub}_${rand}`;
+}
+
 export async function api<T>(
   path: string,
   token: string | null,

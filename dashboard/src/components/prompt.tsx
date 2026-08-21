@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { RouteResponse, TraceEntry } from "@/lib/types";
-import { API_URL, NODE_COLORS, fmtMoney, fmtNum, api } from "@/lib/api";
+import { API_URL, NODE_COLORS, fmtMoney, fmtNum, api, newSessionId } from "@/lib/api";
 import { panelStyle, SectionTitle, ghostBtn, badgeStyle, easeOutExpo } from "@/components/ui";
 
 interface SettingsMap {
@@ -126,13 +126,19 @@ export function PromptSection({
     setError(null);
     setTrace([]);
     setSessionId(null);
+
+    // Open the trace stream before the /route call resolves so agent steps
+    // show up live as the pipeline runs, instead of all at once at the end.
+    const sid = newSessionId(token);
+    if (sid) connectTrace(sid);
+
     try {
       const r = await api<RouteResponse>("/route", token, {
         method: "POST",
-        body: JSON.stringify({ prompt, api_key: "" }),
+        body: JSON.stringify({ prompt, api_key: "", session_id: sid || undefined }),
       });
       setResponse(r);
-      connectTrace(r.session_id);
+      if (!sid) connectTrace(r.session_id);
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error — is the API running?");
