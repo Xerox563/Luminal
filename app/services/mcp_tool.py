@@ -1,4 +1,5 @@
 import httpx
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models import MCPToolConfig, User
@@ -139,6 +140,3 @@ async def find_matching_tool(db: AsyncSession, user_id: int, prompt: str) -> Opt
     if best_score >= 1:
         return best_match
     return None
-
-
-from datetime import datetime
