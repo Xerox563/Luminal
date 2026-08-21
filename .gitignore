@@ -13,3 +13,5 @@ next-env.d.ts
 # Local runtime artifacts
 *.db
 *.log
+chroma/
+chroma.sqlite3
