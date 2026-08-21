@@ -45,9 +45,9 @@ async def retrieve_node(state: AgentState) -> AgentState:
 async def tool_node(state: AgentState) -> AgentState:
     state.add_trace("tool", "start", {"prompt": state.current_prompt})
     
-    async for db in get_db():
+    from app.db.session import async_session_maker
+    async with async_session_maker() as db:
         tool_results = await process_tool_calls(db, state.user_id, state.current_prompt, use_llm=settings.use_llm_complexity)
-        break
     
     if tool_results:
         state.tool_results = [
@@ -70,10 +70,9 @@ async def tool_node(state: AgentState) -> AgentState:
 async def route_node(state: AgentState) -> AgentState:
     state.add_trace("route", "start", {"complexity": state.complexity.value if state.complexity else None})
     
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from app.db.session import get_db
+    from app.db.session import async_session_maker
     
-    async for db in get_db():
+    async with async_session_maker() as db:
         model_config, _ = await route_request(db, state.user_id, state.current_prompt)
         state.selected_model = model_config.model_name
         state.selected_provider = model_config.provider
@@ -83,13 +82,15 @@ async def route_node(state: AgentState) -> AgentState:
             "max_tokens": model_config.max_tokens,
             "temperature": float(model_config.temperature)
         }
-        break
     
     state.add_trace("route", "complete", {"model": state.selected_model, "provider": state.selected_provider})
     return state
 
 
 async def generate_node(state: AgentState) -> AgentState:
+    import time
+    start_time = time.time()
+    
     state.add_trace("generate", "start", {"model": state.selected_model})
     
     if not state.model_config:
@@ -117,7 +118,25 @@ async def generate_node(state: AgentState) -> AgentState:
         )
         
         state.response = result["content"]
-        state.add_trace("generate", "complete", {"tokens": result.get("total_tokens", 0)})
+        
+        prompt_tokens = result.get("prompt_tokens", 0)
+        completion_tokens = result.get("completion_tokens", 0)
+        total_tokens = result.get("total_tokens", prompt_tokens + completion_tokens)
+        state.prompt_tokens = prompt_tokens
+        state.completion_tokens = completion_tokens
+        state.tokens_used = total_tokens
+        
+        cost = provider_obj.calculate_cost(state.selected_model, prompt_tokens, completion_tokens)
+        state.cost = cost
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        state.latency_ms = latency_ms
+        
+        state.add_trace("generate", "complete", {
+            "tokens": total_tokens,
+            "cost": cost,
+            "latency_ms": latency_ms
+        })
     except Exception as e:
         state.error = str(e)
         state.error_count += 1
@@ -132,6 +151,11 @@ async def critic_node(state: AgentState) -> AgentState:
     if state.regeneration_count >= state.max_regenerations:
         state.should_regenerate = False
         state.add_trace("critic", "max_regenerations_reached")
+        return state
+    
+    if not state.response or state.error:
+        state.should_regenerate = False
+        state.add_trace("critic", "skipped_no_response", {"error": state.error})
         return state
     
     provider_obj = ProviderRegistry.get("openrouter") or ProviderRegistry.get("openai")
@@ -232,7 +256,10 @@ async def error_recovery_node(state: AgentState) -> AgentState:
 
 
 def should_continue_to_tool(state: AgentState) -> Literal["tool", "route"]:
-    return "tool"
+    from app.services.tool_calling import needs_tool_call
+    if needs_tool_call(state.current_prompt):
+        return "tool"
+    return "route"
 
 
 def should_continue_to_critic(state: AgentState) -> Literal["critic", "end"]:
@@ -254,7 +281,11 @@ def should_handle_error(state: AgentState) -> Literal["error_recovery", "end"]:
     return "end"
 
 
-def should_request_approval(state: AgentState) -> Literal["approval", "generate"]:
+def should_request_approval(state: AgentState) -> Literal["approval", "generate", "end"]:
     if state.approval_required:
         return "approval"
+    if state.response:
+        return "end"
+    if state.error_count >= state.max_errors:
+        return "end"
     return "generate"

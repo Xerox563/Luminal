@@ -15,6 +15,24 @@ class ToolCallDecision:
     reasoning: str
 
 
+TOOL_KEYWORDS = [
+    "weather", "forecast", "temperature",
+    "order", "status", "tracking", "shipment", "delivery",
+    "search", "find", "lookup", "query",
+    "calculate", "compute", "math",
+    "database", "db", "query", "sql",
+    "api", "call", "external", "service",
+    "email", "send", "notify",
+    "payment", "refund", "charge",
+    "inventory", "stock", "available"
+]
+
+
+def needs_tool_call(prompt: str) -> bool:
+    prompt_lower = prompt.lower()
+    return any(keyword in prompt_lower for keyword in TOOL_KEYWORDS)
+
+
 async def decide_tool_call(db: AsyncSession, user_id: int, prompt: str) -> ToolCallDecision:
     prompt_lower = prompt.lower()
     
