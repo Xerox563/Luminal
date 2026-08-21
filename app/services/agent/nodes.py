@@ -1,6 +1,6 @@
 from typing import Dict, Any, Literal
 from langgraph.graph import StateGraph
-from app.services.agent.state import AgentState
+from app.services.agent.state import AgentState, Message
 from app.services.router import route_request
 from app.services.rag import inject_context, format_response_with_citations
 from app.services.tool_calling import decide_tool_call
@@ -9,6 +9,8 @@ from app.services.mcp import get_mcp_client
 from app.services.providers import ProviderRegistry
 from app.services.complexity import score_complexity
 from app.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import get_db
 import json
 
 
@@ -43,7 +45,9 @@ async def retrieve_node(state: AgentState) -> AgentState:
 async def tool_node(state: AgentState) -> AgentState:
     state.add_trace("tool", "start", {"prompt": state.current_prompt})
     
-    tool_results = await process_tool_calls(state.current_prompt, use_llm=settings.use_llm_complexity)
+    async for db in get_db():
+        tool_results = await process_tool_calls(db, state.user_id, state.current_prompt, use_llm=settings.use_llm_complexity)
+        break
     
     if tool_results:
         state.tool_results = [

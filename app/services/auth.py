@@ -3,6 +3,8 @@ from typing import Annotated
 from jose import jwt
 from passlib.context import CryptContext
 import hashlib
+import os
+from cryptography.fernet import Fernet
 from fastapi import HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
 
@@ -15,7 +17,42 @@ from app.db.session import get_db
 from app.core.config import settings
 from app.models import User
 
+# Use SHA256 for simplicity (bcrypt has version issues)
+def get_password_hash(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def get_encryption_key() -> bytes:
+    """Get or create the encryption key for provider API keys."""
+    key = settings.encryption_key
+    if not key:
+        # Generate a key from secret_key for deterministic encryption
+        import base64
+        key = base64.urlsafe_b64encode(hashlib.sha256(settings.secret_key.encode()).digest()).decode()
+    if isinstance(key, str):
+        key = key.encode()
+    return key
+
+
+def encrypt_provider_key(api_key: str) -> str:
+    """Encrypt a provider API key."""
+    key = get_encryption_key()
+    f = Fernet(key)
+    return f.encrypt(api_key.encode()).decode()
+
+
+def decrypt_provider_key(encrypted_key: str) -> str:
+    """Decrypt a provider API key."""
+    key = get_encryption_key()
+    f = Fernet(key)
+    return f.decrypt(encrypted_key.encode()).decode()
 
 
 async def get_current_user_from_api_key(
@@ -64,17 +101,6 @@ async def get_current_user(
     return user
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    # bcrypt has a 72-byte limit, truncate if necessary
-    if len(password) > 72:
-        password = password[:72]
-    return pwd_context.hash(password)
-
-
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
@@ -82,6 +108,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
+    # python-jose requires "sub" to be a string
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 

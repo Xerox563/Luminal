@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.services.auth import get_current_user_from_api_key, decode_token, settings
 from app.services.router import route_request
 from app.services.openrouter import call_openrouter, calculate_cost
-from app.services.budget import add_spend, get_budget_status
+from app.services.budget import add_spend, get_budget_status, check_and_reset_budget
 from app.services.cache import generate_cache_key, get_cached_response, set_cached_response
 from app.services.retry import execute_with_fallback
 from app.services.rate_limit import check_rate_limit
@@ -38,23 +38,27 @@ async def get_current_user_flexible(
     db: AsyncSession,
     api_key: Optional[str] = None
 ) -> User:
-    """Get user from either API key (in request body) or JWT token (in Authorization header)."""
-    # Try JWT token first (for dashboard)
+    """Get user from either API key (in request body or Authorization header) or JWT token (in Authorization header)."""
+    # Try Authorization header first
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:]
+        # Check if it's a Luminal API key (starts with lum_)
+        if token.startswith("lum_"):
+            return await get_current_user_from_api_key(token, db)
+        # Otherwise try JWT token (for dashboard)
         try:
             payload = decode_token(token)
             user_id = payload.get("sub")
             if user_id:
-                result = await db.execute(select(User).where(User.id == user_id))
+                result = await db.execute(select(User).where(User.id == int(user_id)))
                 user = result.scalar_one_or_none()
                 if user and user.is_active:
                     return user
         except Exception:
             pass
     
-    # Fall back to API key (for API clients)
+    # Fall back to API key in request body (for API clients)
     if api_key:
         return await get_current_user_from_api_key(api_key, db)
     
@@ -65,7 +69,17 @@ async def get_current_user_flexible(
     )
 
 
-async def check_rate_limit_dependency(request: Request, api_key: str = ""):
+async def check_rate_limit_dependency(request: Request, body: RouteRequest):
+    # Extract API key from Authorization header or request body for rate limiting
+    api_key = ""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        if token.startswith("lum_"):
+            api_key = token
+    if not api_key and body.api_key:
+        api_key = body.api_key
+    
     key = f"rate_limit:{api_key}"
     allowed, used, limit = await check_rate_limit(key, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW)
     if not allowed:
@@ -84,7 +98,9 @@ async def route_prompt(
     db: AsyncSession = Depends(get_db),
     rate_limit: dict = Depends(check_rate_limit_dependency)
 ):
-    user = await get_current_user_flexible(request, db, body.api_key)
+    user = await get_current_user_flexible(request, db, body.api_key or None)
+    
+    await check_and_reset_budget(db, user.id)
     
     budget_status = await get_budget_status(db, user.id)
     if budget_status.get("is_over_budget"):
@@ -152,6 +168,8 @@ async def route_prompt_stream(
 ):
     user = await get_current_user_flexible(request, db, body.api_key)
     
+    await check_and_reset_budget(db, user.id)
+    
     budget_status = await get_budget_status(db, user.id)
     if budget_status.get("is_over_budget"):
         raise HTTPException(status_code=402, detail="Monthly budget exceeded")
@@ -182,6 +200,7 @@ async def route_prompt_stream(
         full_content = ""
         prompt_tokens = 0
         completion_tokens = 0
+        total_tokens = 0
         
         try:
             async for chunk in provider_obj.chat_completion_stream(
@@ -193,17 +212,30 @@ async def route_prompt_stream(
                 full_content += chunk
                 yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
             
-            cost = provider_obj.calculate_cost(model_config.model_name, prompt_tokens, len(full_content.split()) * 1.3)
+            # Get actual token usage from the provider
+            # For OpenRouter, the last chunk contains usage info
+            # We'll use the non-streaming method to get accurate usage
+            # For now, estimate based on content length
+            estimated_completion_tokens = len(full_content.split()) * 1.3
+            # Estimate prompt tokens based on message length
+            prompt_text = " ".join([m.get("content", "") for m in messages])
+            estimated_prompt_tokens = len(prompt_text.split()) * 1.3
+            
+            cost = provider_obj.calculate_cost(
+                model_config.model_name, 
+                int(estimated_prompt_tokens), 
+                int(estimated_completion_tokens)
+            )
             
             log = ExecutionLog(
                 user_id=user.id,
-                prompt=request.prompt,
+                prompt=body.prompt,
                 model_used=model_config.model_name,
                 provider=model_config.provider,
                 complexity=complexity,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=int(len(full_content.split()) * 1.3),
-                total_tokens=prompt_tokens + int(len(full_content.split()) * 1.3),
+                prompt_tokens=int(estimated_prompt_tokens),
+                completion_tokens=int(estimated_completion_tokens),
+                total_tokens=int(estimated_prompt_tokens + estimated_completion_tokens),
                 cost=cost,
                 latency_ms=0,
                 retrieval_metadata={"used_rag": rag_result.used_rag, "citations": rag_result.citations} if rag_result.used_rag else None,
@@ -240,4 +272,14 @@ async def stream_trace(session_id: str):
                 break
             await asyncio.sleep(0.3)
     
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Allow-Headers": "*",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )

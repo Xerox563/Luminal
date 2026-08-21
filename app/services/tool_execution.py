@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
-from app.services.mcp import get_mcp_client
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.mcp_tool import execute_mcp_tool, get_mcp_tool_by_name
 from app.services.tool_calling import decide_tool_call, decide_tool_call_llm, ToolCallDecision
 from app.core.config import settings
 
@@ -14,7 +15,7 @@ class ToolExecutionResult:
     arguments: Dict[str, Any] = None
 
 
-async def execute_tool_call(decision: ToolCallDecision) -> ToolExecutionResult:
+async def execute_tool_call(db: AsyncSession, user_id: int, decision: ToolCallDecision) -> ToolExecutionResult:
     if not decision.should_call or not decision.tool_name:
         return ToolExecutionResult(
             tool_name="none",
@@ -24,10 +25,20 @@ async def execute_tool_call(decision: ToolCallDecision) -> ToolExecutionResult:
             arguments=decision.arguments
         )
     
-    client = get_mcp_client()
+    # Get the user's registered tool
+    tool = await get_mcp_tool_by_name(db, user_id, decision.tool_name)
+    
+    if not tool:
+        return ToolExecutionResult(
+            tool_name=decision.tool_name,
+            success=False,
+            result=None,
+            error=f"Tool '{decision.tool_name}' not found or not active",
+            arguments=decision.arguments
+        )
     
     try:
-        result = await client.execute_tool(decision.tool_name, decision.arguments)
+        result = await execute_mcp_tool(tool, decision.arguments)
         return ToolExecutionResult(
             tool_name=decision.tool_name,
             success=True,
@@ -44,16 +55,16 @@ async def execute_tool_call(decision: ToolCallDecision) -> ToolExecutionResult:
         )
 
 
-async def process_tool_calls(prompt: str, use_llm: bool = False) -> List[ToolExecutionResult]:
+async def process_tool_calls(db: AsyncSession, user_id: int, prompt: str, use_llm: bool = False) -> List[ToolExecutionResult]:
     if use_llm and settings.use_llm_complexity:
-        decision = await decide_tool_call_llm(prompt)
+        decision = await decide_tool_call_llm(db, user_id, prompt)
     else:
-        decision = await decide_tool_call(prompt)
+        decision = await decide_tool_call(db, user_id, prompt)
     
     if not decision.should_call:
         return []
     
-    result = await execute_tool_call(decision)
+    result = await execute_tool_call(db, user_id, decision)
     return [result]
 
 

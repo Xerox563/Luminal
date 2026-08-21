@@ -4,6 +4,23 @@ from datetime import datetime, date
 from app.models import User
 
 
+async def check_and_reset_budget(db: AsyncSession, user_id: int) -> None:
+    """Check if budget needs to be reset (new month) and reset if needed."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        return
+    
+    today = date.today()
+    first_of_month = datetime(today.year, today.month, 1)
+    
+    # Check if user's spend was last updated before the 1st of this month
+    if user.updated_at and user.updated_at < first_of_month and user.current_spend > 0:
+        user.current_spend = 0
+        user.updated_at = datetime.utcnow()
+        await db.commit()
+
+
 async def reset_monthly_budget(db: AsyncSession) -> int:
     today = date.today()
     first_of_month = datetime(today.year, today.month, 1)
@@ -53,6 +70,15 @@ async def update_budget(db: AsyncSession, user_id: int, new_budget: float) -> Us
 
 
 async def add_spend(db: AsyncSession, user_id: int, amount: float) -> User | None:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+    
+    # Check and reset budget first
+    await check_and_reset_budget(db, user_id)
+    
+    # Refresh user after potential reset
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:

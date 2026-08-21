@@ -37,6 +37,11 @@ async def startup():
     init_providers()
     init_vector_stores()
     init_mcp_services()
+    from app.db.session import AsyncSession
+    from app.db.session import engine
+    from app.services import runtime_settings
+    async with AsyncSession(engine) as db:
+        await runtime_settings.load_settings(db)
 
 
 @app.get("/health")

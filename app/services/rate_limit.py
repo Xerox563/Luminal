@@ -19,36 +19,43 @@ async def check_rate_limit(
     limit: int,
     window: int
 ) -> tuple[bool, int, int]:
-    client = get_redis()
-    current = int(time.time())
-    window_start = current - window
-    
-    pipe = client.pipeline()
-    pipe.zremrangebyscore(key, 0, window_start)
-    pipe.zcard(key)
-    pipe.zadd(key, {str(current): current})
-    pipe.expire(key, window)
-    results = await pipe.execute()
-    
-    current_count = results[1]
-    
-    if current_count >= limit:
-        return False, current_count, limit
-    
-    return True, current_count + 1, limit
+    try:
+        client = get_redis()
+        current = int(time.time())
+        window_start = current - window
+        
+        pipe = client.pipeline()
+        pipe.zremrangebyscore(key, 0, window_start)
+        pipe.zcard(key)
+        pipe.zadd(key, {str(current): current})
+        pipe.expire(key, window)
+        results = await pipe.execute()
+        
+        current_count = results[1]
+        
+        if current_count >= limit:
+            return False, current_count, limit
+        
+        return True, current_count + 1, limit
+    except Exception:
+        # Redis unavailable — allow the request (rate limiting is best-effort)
+        return True, 1, limit
 
 
 async def get_rate_limit_status(key: str, limit: int, window: int) -> dict:
-    client = get_redis()
-    current = int(time.time())
-    window_start = current - window
-    
-    await client.zremrangebyscore(key, 0, window_start)
-    count = await client.zcard(key)
-    
-    return {
-        "limit": limit,
-        "remaining": max(0, limit - count),
-        "reset": current + window,
-        "used": count
-    }
+    try:
+        client = get_redis()
+        current = int(time.time())
+        window_start = current - window
+        
+        await client.zremrangebyscore(key, 0, window_start)
+        count = await client.zcard(key)
+        
+        return {
+            "limit": limit,
+            "remaining": max(0, limit - count),
+            "reset": current + window,
+            "used": count
+        }
+    except Exception:
+        return {"limit": limit, "remaining": limit, "reset": 0, "used": 0}

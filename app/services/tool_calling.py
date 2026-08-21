@@ -1,15 +1,9 @@
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-from app.services.mcp import get_mcp_client
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.mcp_tool import get_active_mcp_tools
 from app.services.providers import ProviderRegistry
 from app.core.config import settings
-
-
-TOOL_KEYWORDS = {
-    "get_weather": ["weather", "temperature", "forecast", "rain", "sunny", "cloudy", "humidity", "wind"],
-    "search_web": ["search", "find", "look up", "google", "latest", "recent", "news", "current"],
-    "calculate": ["calculate", "compute", "math", "equation", "formula", "solve", "arithmetic"]
-}
 
 
 @dataclass
@@ -21,14 +15,27 @@ class ToolCallDecision:
     reasoning: str
 
 
-async def decide_tool_call(prompt: str) -> ToolCallDecision:
+async def decide_tool_call(db: AsyncSession, user_id: int, prompt: str) -> ToolCallDecision:
     prompt_lower = prompt.lower()
     
+    # Get user's registered MCP tools
+    tools = await get_active_mcp_tools(db, user_id)
+    
+    if not tools:
+        return ToolCallDecision(
+            should_call=False,
+            tool_name=None,
+            arguments={},
+            confidence=0.0,
+            reasoning="No tools registered"
+        )
+    
     tool_scores = {}
-    for tool_name, keywords in TOOL_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in prompt_lower)
-        if score > 0:
-            tool_scores[tool_name] = score
+    for tool in tools:
+        if tool.trigger_keywords:
+            score = sum(1 for kw in tool.trigger_keywords if kw.lower() in prompt_lower)
+            if score > 0:
+                tool_scores[tool.name] = (score, tool)
     
     if not tool_scores:
         return ToolCallDecision(
@@ -39,8 +46,8 @@ async def decide_tool_call(prompt: str) -> ToolCallDecision:
             reasoning="No tool keywords detected"
         )
     
-    best_tool = max(tool_scores, key=tool_scores.get)
-    max_score = tool_scores[best_tool]
+    best_tool_name = max(tool_scores, key=lambda x: tool_scores[x][0])
+    max_score, best_tool = tool_scores[best_tool_name]
     
     if max_score >= 2:
         confidence = min(0.9, max_score * 0.3)
@@ -53,17 +60,43 @@ async def decide_tool_call(prompt: str) -> ToolCallDecision:
     
     return ToolCallDecision(
         should_call=confidence >= 0.5,
-        tool_name=best_tool if confidence >= 0.5 else None,
+        tool_name=best_tool_name if confidence >= 0.5 else None,
         arguments=arguments,
         confidence=confidence,
-        reasoning=f"Detected {best_tool} keywords: {TOOL_KEYWORDS[best_tool]}"
+        reasoning=f"Detected {best_tool_name} keywords: {best_tool.trigger_keywords}"
     )
 
 
-def extract_arguments(prompt: str, tool_name: str) -> Dict[str, Any]:
+def extract_arguments(prompt: str, tool) -> Dict[str, Any]:
     import re
     
-    if tool_name == "get_weather":
+    # If tool has parameters schema, use it to extract arguments
+    if tool.parameters_schema:
+        # Simple extraction based on schema properties
+        properties = tool.parameters_schema.get("properties", {})
+        arguments = {}
+        for param_name, param_info in properties.items():
+            param_type = param_info.get("type", "string")
+            # Try to find the value in the prompt
+            # This is a simple implementation - can be enhanced
+            if param_type == "string":
+                # Look for patterns like "param_name value" or "param_name: value"
+                patterns = [
+                    rf'{param_name}["\']?\s*[:=]\s*["\']?([^"\',\s]+)',
+                    rf'{param_name}\s+([^"\',\s]+)'
+                ]
+                for pattern in patterns:
+                    match = re.search(pattern, prompt, re.IGNORECASE)
+                    if match:
+                        arguments[param_name] = match.group(1)
+                        break
+        if arguments:
+            return arguments
+    
+    # Fallback to simple extraction for common tool types
+    tool_name = tool.name.lower()
+    
+    if "weather" in tool_name:
         city_match = re.search(r'(?:weather|temperature|forecast)\s+(?:in|for|at)\s+([a-zA-Z\s]+)', prompt, re.IGNORECASE)
         if city_match:
             return {"city": city_match.group(1).strip()}
@@ -72,13 +105,13 @@ def extract_arguments(prompt: str, tool_name: str) -> Dict[str, Any]:
             return {"city": city_match.group(1).strip()}
         return {"city": "unknown"}
     
-    elif tool_name == "search_web":
+    elif "search" in tool_name:
         query_match = re.search(r'(?:search|find|look up)\s+(?:for\s+)?(.+)', prompt, re.IGNORECASE)
         if query_match:
             return {"query": query_match.group(1).strip()}
         return {"query": prompt}
     
-    elif tool_name == "calculate":
+    elif "calculate" in tool_name or "math" in tool_name:
         expr_match = re.search(r'(?:calculate|compute)\s+(.+)', prompt, re.IGNORECASE)
         if expr_match:
             return {"expression": expr_match.group(1).strip()}
@@ -87,12 +120,12 @@ def extract_arguments(prompt: str, tool_name: str) -> Dict[str, Any]:
             return {"expression": math_expr.group(0).strip()}
         return {"expression": prompt}
     
-    return {}
+    # Generic extraction for unknown tools
+    return {"query": prompt}
 
 
-async def decide_tool_call_llm(prompt: str) -> ToolCallDecision:
-    client = get_mcp_client()
-    tools = client.list_tools()
+async def decide_tool_call_llm(db: AsyncSession, user_id: int, prompt: str) -> ToolCallDecision:
+    tools = await get_active_mcp_tools(db, user_id)
     
     if not tools:
         return ToolCallDecision(
@@ -105,10 +138,10 @@ async def decide_tool_call_llm(prompt: str) -> ToolCallDecision:
     
     provider = ProviderRegistry.get("openrouter") or ProviderRegistry.get("openai")
     if not provider:
-        return decide_tool_call(prompt)
+        return await decide_tool_call(db, user_id, prompt)
     
     tool_descriptions = "\n".join([
-        f"- {t['name']}: {t['description']} (params: {t['parameters']})"
+        f"- {t.name}: {t.description} (params: {t.parameters_schema})"
         for t in tools
     ])
     
@@ -141,4 +174,4 @@ Respond with JSON only:
         decision_data = json.loads(result["content"])
         return ToolCallDecision(**decision_data)
     except Exception:
-        return decide_tool_call(prompt)
+        return await decide_tool_call(db, user_id, prompt)

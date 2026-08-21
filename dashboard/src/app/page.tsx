@@ -1,508 +1,493 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import type {
+  ApiKey,
+  BudgetInfo,
+  DashboardStats,
+  DailyPoint,
+  LogEntry,
+  ModelPerf,
+  RagStats,
+} from "@/lib/types";
+import { API_URL } from "@/lib/api";
+import {
+  StatCard,
+  Toast,
+  BootLoader,
+  LoginScreen,
+  ghostBtn,
+  easeOutExpo,
+} from "@/components/ui";
+import { CostTrendChart, BudgetPanel } from "@/components/charts";
+import { RagPanel, ModelPerfPanel } from "@/components/panels";
+import { PromptSection } from "@/components/prompt";
+import { ApiKeysSection, LogsSection } from "@/components/logs";
+import { SettingsSection } from "@/components/settings";
 
-interface DashboardStats {
-  today: {
-    requests: number;
-    cost: number;
-    tokens: number;
-    avg_latency_ms: number;
-  };
-  month: {
-    requests: number;
-    cost: number;
-    tokens: number;
-    budget: number;
-    budget_remaining: number;
-  };
-  by_model: Array<{
-    model: string;
-    requests: number;
-    cost: number;
-    tokens: number;
-  }>;
-}
+const EMPTY_SETTINGS = {
+  openrouter_api_key: "",
+  openai_api_key: "",
+  anthropic_api_key: "",
+  deepseek_api_key: "",
+  openrouter_base_url: "",
+  openai_base_url: "",
+  anthropic_base_url: "",
+  deepseek_base_url: "",
+  ollama_base_url: "",
+  use_llm_complexity: "false",
+};
 
-interface LogEntry {
-  id: number;
-  prompt: string;
-  model_used: string;
-  complexity: string | null;
-  total_tokens: number;
-  cost: number;
-  latency_ms: number;
-  quality_score: number | null;
-  error_message: string | null;
-  created_at: string;
-}
+const STAT_ICONS = {
+  requests: "M3 12h4l3-8 4 16 3-8h4",
+  cost: "M12 2v20M17 6c0-2.2-2.2-3.5-5-3.5S7 3.8 7 6s2 3.4 5 3.5c3 .1 5 1.6 5 3.5s-2.2 3.5-5 3.5S7 14 7 12",
+  tokens: "M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z",
+  latency: "M13 2 4 14h6l-1 8 9-12h-6l1-8z",
+  calendar: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+  wallet: "M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-8l-2-2H5a2 2 0 0 0-2 2zM12 12v6M9 15h6",
+  trend: "M3 17l6-6 4 4 8-8M21 7v6",
+};
 
-interface TraceEntry {
-  node: string;
-  action: string;
-  timestamp: string;
-  data: Record<string, unknown>;
-}
-
-interface RouteResponse {
-  content: string;
-  model: string;
-  complexity: string;
-  tokens_used: number;
-  cost: number;
-  latency_ms: number;
-  session_id: string;
-}
+const STAT_COLORS = {
+  requests: "#60a5fa",
+  cost: "#a855f7",
+  tokens: "#34d399",
+  latency: "#fbbf24",
+  calendar: "#f472b6",
+  wallet: "#818cf8",
+  trend: "#38bdf8",
+};
 
 export default function Dashboard() {
+  const [token, setToken] = useState<string | null>(null);
+  const [booting, setBooting] = useState(true);
+  const [connected, setConnected] = useState(false);
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [budget, setBudget] = useState<BudgetInfo | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [daily, setDaily] = useState<DailyPoint[]>([]);
+  const [modelPerf, setModelPerf] = useState<ModelPerf[]>([]);
+  const [ragStats, setRagStats] = useState<RagStats | null>(null);
+  const [settings, setSettings] = useState(EMPTY_SETTINGS);
+
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string>("");
-  const [prompt, setPrompt] = useState("");
-  const [response, setResponse] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [showTerminal, setShowTerminal] = useState(true);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const tokenRef = useRef<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem("luminal_token");
-    if (savedToken) {
-      setToken(savedToken);
-      fetchStats();
-      fetchLogs();
+    tokenRef.current = token;
+  }, [token]);
+
+  const notify = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3200);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("luminal_token");
+    tokenRef.current = null;
+    setToken(null);
+    setStats(null);
+    setLogs([]);
+    setBudget(null);
+    setApiKeys([]);
+    setDaily([]);
+    setModelPerf([]);
+    setRagStats(null);
+    setBooting(false);
+  }, []);
+
+  const loadAll = useCallback(
+    async (silent = false) => {
+      const t = tokenRef.current;
+      if (!t) return;
+      if (!silent) setLoading(true);
+      try {
+        const [s, l, b, c, mp, r, st] = await Promise.all([
+          fetch(`${API_URL}/dashboard/stats`, { headers: { Authorization: `Bearer ${t}` } }),
+          fetch(`${API_URL}/dashboard/logs?limit=60`, { headers: { Authorization: `Bearer ${t}` } }),
+          fetch(`${API_URL}/dashboard/budget`, { headers: { Authorization: `Bearer ${t}` } }),
+          fetch(`${API_URL}/dashboard/cost-breakdown?days=30`, {
+            headers: { Authorization: `Bearer ${t}` },
+          }),
+          fetch(`${API_URL}/dashboard/model-performance?days=30`, {
+            headers: { Authorization: `Bearer ${t}` },
+          }),
+          fetch(`${API_URL}/dashboard/rag-stats?days=30`, {
+            headers: { Authorization: `Bearer ${t}` },
+          }),
+          fetch(`${API_URL}/dashboard/settings`, { headers: { Authorization: `Bearer ${t}` } }),
+        ]);
+        if (!s.ok) throw new Error("auth");
+        setStats(await s.json());
+        setLogs(await l.json());
+        setBudget(await b.json());
+        setDaily((await c.json()).daily);
+        setModelPerf(await mp.json());
+        setRagStats(await r.json());
+        if (st.ok) setSettings(await st.json());
+        setConnected(true);
+      } catch (e) {
+        if (e instanceof Error && e.message === "auth") {
+          handleLogout();
+          return;
+        }
+        setConnected(false);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [handleLogout]
+  );
+
+  const loadKeys = useCallback(async () => {
+    const t = tokenRef.current;
+    if (!t) return;
+    try {
+      const res = await fetch(`${API_URL}/api-keys`, { headers: { Authorization: `Bearer ${t}` } });
+      if (res.ok) setApiKeys(await res.json());
+    } catch {
+      /* silent */
     }
   }, []);
 
-  const fetchStats = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch("http://localhost:8000/dashboard/stats", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (e) {
-      console.error("Failed to fetch stats", e);
+  const handleLogin = useCallback(
+    (t: string) => {
+      localStorage.setItem("luminal_token", t);
+      tokenRef.current = t;
+      setToken(t);
+      loadAll();
+      loadKeys();
+    },
+    [loadAll, loadKeys]
+  );
+
+  // Boot: restore session
+  useEffect(() => {
+    const saved = localStorage.getItem("luminal_token");
+    if (!saved) {
+      setBooting(false);
+      return;
     }
-  };
-
-  const fetchLogs = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch("http://localhost:8000/dashboard/logs", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data);
-      }
-    } catch (e) {
-      console.error("Failed to fetch logs", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
-    try {
-      const res = await fetch("http://localhost:8000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ username: email, password }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem("luminal_token", data.access_token);
-        setToken(data.access_token);
-        fetchStats();
-        fetchLogs();
-      } else {
-        alert("Login failed");
-      }
-    } catch (e) {
-      console.error("Login error", e);
-    }
-  };
-
-  const connectTrace = (sessionId: string) => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-    setTraceEntries([]);
-    setCurrentSessionId(sessionId);
-
-    const es = new EventSource(`http://localhost:8000/route/trace/${sessionId}`);
-    eventSourceRef.current = es;
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.done) {
-          es.close();
-          eventSourceRef.current = null;
+    tokenRef.current = saved;
+    fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${saved}` } })
+      .then((r) => {
+        if (r.ok) {
+          setToken(saved);
+          loadAll();
+          loadKeys();
         } else {
-          setTraceEntries(prev => [...prev, data]);
+          localStorage.removeItem("luminal_token");
+          tokenRef.current = null;
         }
-      } catch (e) {
-        console.error("Trace parse error", e);
-      }
-    };
+      })
+      .catch(() => setConnected(false))
+      .finally(() => setBooting(false));
+  }, [loadAll, loadKeys]);
 
-    es.onerror = () => {
-      es.close();
-      eventSourceRef.current = null;
-    };
-  };
+  // Auto-refresh every 45s
+  useEffect(() => {
+    if (!token) return;
+    const id = setInterval(() => loadAll(true), 45000);
+    return () => clearInterval(id);
+  }, [token, loadAll]);
 
-  const handleSendPrompt = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!prompt.trim() || !token) return;
-
-    setSending(true);
-    setResponse(null);
-    setTraceEntries([]);
-    setCurrentSessionId(null);
-
-    try {
-      const res = await fetch("http://localhost:8000/route", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ prompt, api_key: "" }), // api_key not needed with JWT
-      });
-
-      if (res.ok) {
-        const data: RouteResponse = await res.json();
-        setResponse(data.content);
-        connectTrace(data.session_id);
-        fetchStats();
-        fetchLogs();
-      } else {
-        const error = await res.json();
-        setResponse(`Error: ${error.detail || "Request failed"}`);
-      }
-    } catch (e) {
-      setResponse(`Error: ${e instanceof Error ? e.message : "Unknown error"}`);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const clearTerminal = () => {
-    setTraceEntries([]);
-    setCurrentSessionId(null);
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-  };
-
-  if (!token) {
+  if (booting) {
     return (
-      <div style={{ maxWidth: 400, margin: "50px auto", padding: 20, fontFamily: "system-ui" }}>
-        <h1>Luminal Dashboard</h1>
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 4 }}>Email</label>
-            <input name="email" type="email" required style={{ width: "100%", padding: 8, boxSizing: "border-box" }} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 4 }}>Password</label>
-            <input name="password" type="password" required style={{ width: "100%", padding: 8, boxSizing: "border-box" }} />
-          </div>
-          <button type="submit" style={{ width: "100%", padding: 10, background: "#0070f3", color: "white", border: "none", borderRadius: 4, cursor: "pointer" }}>
-            Login
-          </button>
-        </form>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <BootLoader />
       </div>
     );
   }
 
-  if (loading) {
-    return <div style={{ padding: 20 }}>Loading...</div>;
+  if (!token) {
+    return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: 20, fontFamily: "system-ui" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1>Luminal Dashboard</h1>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <label style={{ fontSize: 14, color: "#6b7280" }}>
-            <input type="checkbox" checked={showTerminal} onChange={e => setShowTerminal(e.target.checked)} style={{ marginRight: 6 }} />
-            Live Terminal
-          </label>
-          <button onClick={() => { localStorage.removeItem("luminal_token"); window.location.reload(); }} style={{ padding: "8px 16px", background: "#dc2626", color: "white", border: "none", borderRadius: 4, cursor: "pointer" }}>
-            Logout
-          </button>
-        </div>
-      </header>
+    <div style={{ minHeight: "100vh", color: "#e4e4e7" }}>
+      <div className="bg-glow top" />
+      <div className="bg-glow right" />
+      <div className="bg-grid" />
 
-      <div style={{ display: "grid", gridTemplateColumns: showTerminal ? "1fr 400px" : "1fr", gap: 24 }}>
-        <div>
-          <section style={{ marginBottom: 24 }}>
-            <h2 style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              Send Prompt
-              <span style={{ fontSize: 12, color: "#6b7280", fontWeight: "normal" }}>Powered by LangGraph Agent</span>
-            </h2>
-            <form onSubmit={handleSendPrompt} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <textarea
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                placeholder="Enter your prompt... (e.g., 'What is the capital of France?' or 'Analyze AI impact on jobs')"
-                rows={3}
-                style={{ padding: 12, borderRadius: 8, border: "1px solid #e5e7eb", fontFamily: "inherit", fontSize: 14, resize: "vertical" }}
-                disabled={sending}
-              />
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button
-                  type="submit"
-                  disabled={sending || !prompt.trim()}
-                  style={{
-                    padding: "10px 24px",
-                    background: sending ? "#9ca3af" : "#0070f3",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 4,
-                    cursor: sending ? "not-allowed" : "pointer",
-                    fontWeight: 500
-                  }}
-                >
-                  {sending ? "Processing..." : "Send Prompt"}
-                </button>
-                <button
-                  type="button"
-                  onClick={clearTerminal}
-                  style={{ padding: "10px 24px", background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 4, cursor: "pointer" }}
-                >
-                  Clear Terminal
-                </button>
-              </div>
-            </form>
-          </section>
+      <Toast toast={toast} />
 
-          {response && (
-            <section style={{ marginBottom: 24 }}>
-              <h3>Response</h3>
-              <div style={{
-                background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                padding: 16,
-                whiteSpace: "pre-wrap",
-                fontSize: 14,
-                lineHeight: 1.6
-              }}>
-                {response}
-              </div>
-            </section>
-          )}
+      <Header connected={connected} budget={budget} onRefresh={() => loadAll(true)} onLogout={handleLogout} />
 
-          {stats && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 24 }}>
-              <StatCard title="Today's Requests" value={stats.today.requests} />
-              <StatCard title="Today's Cost" value={`$${stats.today.cost.toFixed(4)}`} />
-              <StatCard title="Today's Tokens" value={stats.today.tokens.toLocaleString()} />
-              <StatCard title="Avg Latency" value={`${stats.today.avg_latency_ms.toFixed(0)}ms`} />
-              <StatCard title="Monthly Requests" value={stats.month.requests} />
-              <StatCard title="Monthly Cost" value={`$${stats.month.cost.toFixed(4)}`} />
-              <StatCard title="Budget Remaining" value={`$${Math.max(0, stats.month.budget_remaining).toFixed(2)}`} />
-            </div>
-          )}
+      <main style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 32px 80px" }}>
+        {/* Stat cards */}
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <motion.div
+              key="skel"
+              exit={{ opacity: 0 }}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                gap: 14,
+              }}
+            >
+              {[...Array(7)].map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 110, borderRadius: 18 }} />
+              ))}
+            </motion.div>
+          ) : stats ? (
+            <motion.div
+              key="stats"
+              initial="hidden"
+              animate="show"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                gap: 14,
+              }}
+            >
+              <StatCard i={0} label="Requests Today" value={stats.today.requests} fmt={(v) => v.toLocaleString()} icon={STAT_ICONS.requests} accent={STAT_COLORS.requests} />
+              <StatCard i={1} label="Cost Today" value={stats.today.cost} fmt={(v) => `$${v >= 1000 ? v.toFixed(2) : v.toFixed(4)}`} icon={STAT_ICONS.cost} accent={STAT_COLORS.cost} />
+              <StatCard i={2} label="Tokens Today" value={stats.today.tokens} fmt={(v) => v.toLocaleString()} icon={STAT_ICONS.tokens} accent={STAT_COLORS.tokens} />
+              <StatCard i={3} label="Avg Latency" value={stats.today.avg_latency_ms} fmt={(v) => `${Math.round(v)}ms`} icon={STAT_ICONS.latency} accent={STAT_COLORS.latency} />
+              <StatCard i={4} label="Monthly Cost" value={stats.month.cost} fmt={(v) => `$${v >= 1000 ? v.toFixed(2) : v.toFixed(4)}`} icon={STAT_ICONS.calendar} accent={STAT_COLORS.calendar} />
+              <StatCard i={5} label="Budget Left" value={Math.max(0, stats.month.budget_remaining)} fmt={(v) => `$${v.toFixed(2)}`} icon={STAT_ICONS.wallet} accent={STAT_COLORS.wallet} />
+              <StatCard i={6} label="Requests / Month" value={stats.month.requests} fmt={(v) => v.toLocaleString()} icon={STAT_ICONS.trend} accent={STAT_COLORS.trend} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-          {stats && stats.by_model.length > 0 && (
-            <section style={{ marginBottom: 24 }}>
-              <h2>Cost by Model (This Month)</h2>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", borderBottom: "2px solid #e5e7eb" }}>
-                    <th style={{ padding: 8 }}>Model</th>
-                    <th style={{ padding: 8 }}>Requests</th>
-                    <th style={{ padding: 8 }}>Cost</th>
-                    <th style={{ padding: 8 }}>Tokens</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.by_model.map((m) => (
-                    <tr key={m.model} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                      <td style={{ padding: 8 }}>{m.model}</td>
-                      <td style={{ padding: 8 }}>{m.requests}</td>
-                      <td style={{ padding: 8 }}>${m.cost.toFixed(6)}</td>
-                      <td style={{ padding: 8 }}>{m.tokens.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
+        {/* Charts row */}
+        {!loading && stats && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55, duration: 0.5, ease: easeOutExpo }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr)",
+              gap: 16,
+              marginTop: 16,
+            }}
+          >
+            <CostTrendChart daily={daily} />
+            <BudgetPanel
+              budget={budget}
+              token={token}
+              onSaved={(b) => {
+                setBudget(b);
+                notify("Budget updated");
+              }}
+            />
+          </motion.div>
+        )}
 
-          <section>
-            <h2>Recent Logs</h2>
-            {logs.length === 0 ? (
-              <p>No logs yet. Send a request to see logs here.</p>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", borderBottom: "2px solid #e5e7eb" }}>
-                    <th style={{ padding: 8 }}>Time</th>
-                    <th style={{ padding: 8 }}>Prompt</th>
-                    <th style={{ padding: 8 }}>Model</th>
-                    <th style={{ padding: 8 }}>Complexity</th>
-                    <th style={{ padding: 8 }}>Tokens</th>
-                    <th style={{ padding: 8 }}>Cost</th>
-                    <th style={{ padding: 8 }}>Latency</th>
-                    <th style={{ padding: 8 }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                      <td style={{ padding: 8 }}>{new Date(log.created_at).toLocaleString()}</td>
-                      <td style={{ padding: 8, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.prompt}</td>
-                      <td style={{ padding: 8 }}>{log.model_used}</td>
-                      <td style={{ padding: 8 }}>{log.complexity || "-"}</td>
-                      <td style={{ padding: 8 }}>{log.total_tokens.toLocaleString()}</td>
-                      <td style={{ padding: 8 }}>${log.cost.toFixed(6)}</td>
-                      <td style={{ padding: 8 }}>{log.latency_ms}ms</td>
-                      <td style={{ padding: 8, color: log.error_message ? "#dc2626" : "#16a34a" }}>
-                        {log.error_message ? "Error" : "Success"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        </div>
+        {/* RAG + Models */}
+        {!loading && stats && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.5, ease: easeOutExpo }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.6fr)",
+              gap: 16,
+              marginTop: 16,
+            }}
+          >
+            <RagPanel rag={ragStats} />
+            <ModelPerfPanel data={modelPerf} />
+          </motion.div>
+        )}
 
-        {showTerminal && (
-          <div style={{ 
-            background: "#1e1e1e", 
-            borderRadius: 8, 
-            height: "calc(100vh - 140px)", 
-            maxHeight: "calc(100vh - 140px)",
-            display: "flex", 
-            flexDirection: "column",
-            border: "1px solid #333"
-          }}>
-            <div style={{ 
-              padding: "12px 16px", 
-              background: "#252526", 
-              borderBottom: "1px solid #333",
+        {/* Prompt tester + live terminal */}
+        {!loading && <PromptSection token={token} onComplete={() => loadAll(true)} />}
+
+        {/* Provider settings */}
+        <SettingsSection token={token} settings={settings} setSettings={setSettings} notify={notify} />
+
+        {/* API keys + logs */}
+        <ApiKeysSection token={token} keys={apiKeys} setKeys={setApiKeys} notify={notify} />
+        <LogsSection logs={logs} />
+      </main>
+    </div>
+  );
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────
+function Header({
+  connected,
+  budget,
+  onRefresh,
+  onLogout,
+}: {
+  connected: boolean;
+  budget: BudgetInfo | null;
+  onRefresh: () => void;
+  onLogout: () => void;
+}) {
+  const pct = budget ? Math.min(100, budget.percent_used) : 0;
+  const pctColor =
+    budget && budget.alert_threshold_95
+      ? "#ef4444"
+      : budget && budget.alert_threshold_80
+      ? "#fbbf24"
+      : "#34d399";
+
+  return (
+    <motion.header
+      initial={{ y: -24, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.5, ease: easeOutExpo }}
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(8,8,12,0.75)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1440,
+          margin: "0 auto",
+          padding: "14px 32px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <motion.div
+            initial={{ rotate: -30, scale: 0.6 }}
+            animate={{ rotate: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18, delay: 0.1 }}
+            whileHover={{ rotate: [0, -8, 8, 0] }}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 11,
+              background: "linear-gradient(135deg, #6366f1, #a855f7)",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <span style={{ color: "#cccccc", fontFamily: "monospace", fontSize: 13 }}>▶ LIVE AGENT TRACE</span>
-              <span style={{ 
-                fontSize: 11, 
-                color: currentSessionId ? "#4ade80" : "#f87171",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 19,
+              fontWeight: 800,
+              color: "white",
+              boxShadow: "0 0 24px rgba(139,92,246,0.45)",
+            }}
+          >
+            L
+          </motion.div>
+          <div>
+            <h1 style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Luminal</h1>
+            <p style={{ fontSize: 11.5, color: "#71717a", marginTop: 1 }}>
+              Intelligent LLM Routing Gateway
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "7px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.03)",
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: connected ? "#34d399" : "#ef4444",
+                boxShadow: `0 0 10px ${connected ? "#34d399" : "#ef4444"}`,
+                animation: connected ? "pulse-dot 1.6s infinite" : "none",
+              }}
+            />
+            <span
+              style={{ fontSize: 12, color: connected ? "#34d399" : "#f87171", fontWeight: 600 }}
+            >
+              {connected ? "LIVE" : "OFFLINE"}
+            </span>
+          </div>
+
+          {budget && (
+            <div
+              style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6
-              }}>
-                {currentSessionId ? (
-                  <>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ade80" }}></span>
-                    CONNECTED
-                  </>
-                ) : (
-                  <>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171" }}></span>
-                    WAITING
-                  </>
-                )}
+                gap: 8,
+                padding: "7px 12px",
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 36 36">
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="15.5"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeWidth="3.5"
+                />
+                <motion.circle
+                  cx="18"
+                  cy="18"
+                  r="15.5"
+                  fill="none"
+                  stroke={pctColor}
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 15.5}
+                  initial={{ strokeDashoffset: 2 * Math.PI * 15.5 }}
+                  animate={{ strokeDashoffset: 2 * Math.PI * 15.5 * (1 - pct / 100) }}
+                  transition={{ duration: 1.4, ease: "easeOut" }}
+                  transform="rotate(-90 18 18)"
+                />
+              </svg>
+              <span style={{ fontSize: 12, color: "#a1a1aa" }}>
+                Budget <b style={{ color: pctColor }}>{Math.round(pct)}%</b> used
               </span>
             </div>
-            <div style={{ 
-              flex: 1, 
-              overflow: "auto", 
-              padding: 12,
-              fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
-              fontSize: 12,
-              lineHeight: 1.5
-            }}>
-              {traceEntries.length === 0 ? (
-                <div style={{ color: "#666", padding: 20, textAlign: "center" }}>
-                  {currentSessionId ? "Waiting for agent events..." : "Send a prompt to see live trace"}
-                </div>
-              ) : (
-                traceEntries.map((entry, idx) => (
-                  <TraceLine key={idx} entry={entry} />
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+          )}
 
-function TraceLine({ entry }: { entry: TraceEntry }) {
-  const getColor = (node: string) => {
-    const colors: Record<string, string> = {
-      analyze: "#60a5fa",
-      retrieve: "#a78bfa",
-      tool: "#fbbf24",
-      route: "#34d399",
-      generate: "#f87171",
-      critic: "#f472b6",
-      approval: "#fb923c",
-      error_recovery: "#ef4444",
-    };
-    return colors[node] || "#9ca3af";
-  };
-
-  const nodeColor = getColor(entry.node);
-  const time = new Date(entry.timestamp).toLocaleTimeString();
-
-  return (
-    <div style={{ marginBottom: 4, borderLeft: `3px solid ${nodeColor}`, paddingLeft: 8 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-        <span style={{ color: "#6b7280", fontSize: 11 }}>{time}</span>
-        <span style={{ 
-          color: nodeColor, 
-          fontWeight: 600, 
-          textTransform: "uppercase",
-          fontSize: 11,
-          background: `${nodeColor}22`,
-          padding: "1px 6px",
-          borderRadius: 3
-        }}>
-          {entry.node}
-        </span>
-        <span style={{ color: "#d1d5db", fontSize: 12 }}>{entry.action}</span>
-      </div>
-      {Object.keys(entry.data).length > 0 && (
-        <div style={{ marginTop: 2, paddingLeft: 16, color: "#9ca3af", fontSize: 11 }}>
-          {Object.entries(entry.data).map(([k, v]) => (
-            <span key={k} style={{ marginRight: 12 }}>
-              <span style={{ color: "#6b7280" }}>{k}:</span> {String(v).slice(0, 100)}
-            </span>
-          ))}
+          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }} onClick={onRefresh} style={ghostBtn} title="Refresh">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+            </svg>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onLogout}
+            style={{ ...ghostBtn, color: "#f87171", borderColor: "rgba(248,113,113,0.3)" }}
+          >
+            Logout
+          </motion.button>
         </div>
-      )}
-    </div>
-  );
-}
-
-function StatCard({ title, value }: { title: string; value: string | number }) {
-  return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 16, background: "white" }}>
-      <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 600 }}>{value}</div>
-    </div>
+      </div>
+    </motion.header>
   );
 }

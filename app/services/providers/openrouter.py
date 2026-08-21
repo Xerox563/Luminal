@@ -7,20 +7,28 @@ from app.core.config import settings
 from app.services import runtime_settings
 
 
-class DeepSeekProvider(LLMProvider):
+class OpenRouterProvider(LLMProvider):
+    """Provider that routes through OpenRouter (single key, many models)."""
+
     @property
     def name(self) -> str:
-        return "deepseek"
+        return "openrouter"
 
     @property
     def supported_models(self) -> list[str]:
-        return ["deepseek-chat", "deepseek-coder"]
+        return [
+            "openai/gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4-turbo", "openai/gpt-4",
+            "openai/gpt-3.5-turbo", "openai/gpt-3.5-turbo-16k",
+            "anthropic/claude-3-opus", "anthropic/claude-3-sonnet",
+            "anthropic/claude-3-haiku", "anthropic/claude-3.5-sonnet",
+            "deepseek/deepseek-chat", "deepseek/deepseek-reasoner",
+        ]
 
     def _get_api_key(self) -> str:
-        return runtime_settings.get_setting("deepseek_api_key") or settings.deepseek_api_key or settings.openrouter_api_key
+        return runtime_settings.get_setting("openrouter_api_key") or settings.openrouter_api_key
 
     def _get_base_url(self) -> str:
-        return runtime_settings.get_setting("deepseek_base_url") or settings.deepseek_base_url or "https://api.deepseek.com/v1"
+        return runtime_settings.get_setting("openrouter_base_url") or settings.openrouter_base_url or "https://openrouter.ai/api/v1"
 
     async def chat_completion(
         self,
@@ -32,22 +40,23 @@ class DeepSeekProvider(LLMProvider):
     ) -> dict:
         headers = {
             "Authorization": f"Bearer {self._get_api_key()}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "Luminal",
         }
         payload = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "stream": stream
         }
 
         start_time = time.time()
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{self._get_base_url()}/chat/completions",
                 headers=headers,
-                json=payload
+                json=payload,
             )
             latency_ms = int((time.time() - start_time) * 1000)
 
@@ -63,7 +72,7 @@ class DeepSeekProvider(LLMProvider):
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
             "total_tokens": usage.get("total_tokens", 0),
-            "latency_ms": latency_ms
+            "latency_ms": latency_ms,
         }
 
     async def chat_completion_stream(
@@ -75,22 +84,24 @@ class DeepSeekProvider(LLMProvider):
     ) -> AsyncGenerator[str, None]:
         headers = {
             "Authorization": f"Bearer {self._get_api_key()}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "Luminal",
         }
         payload = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "stream": True
+            "stream": True,
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
                 f"{self._get_base_url()}/chat/completions",
                 headers=headers,
-                json=payload
+                json=payload,
             ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -108,10 +119,20 @@ class DeepSeekProvider(LLMProvider):
 
     def calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
         pricing = {
-            "deepseek-chat": {"input": 0.14, "output": 0.28},
-            "deepseek-coder": {"input": 0.14, "output": 0.28},
+            "anthropic/claude-3-haiku": {"input": 0.25, "output": 1.25},
+            "anthropic/claude-3-sonnet": {"input": 3.0, "output": 15.0},
+            "anthropic/claude-3-opus": {"input": 15.0, "output": 75.0},
+            "anthropic/claude-3.5-sonnet": {"input": 3.0, "output": 15.0},
+            "openai/gpt-4o": {"input": 5.0, "output": 15.0},
+            "openai/gpt-4o-mini": {"input": 0.15, "output": 0.6},
+            "openai/gpt-4-turbo": {"input": 10.0, "output": 30.0},
+            "openai/gpt-4": {"input": 30.0, "output": 60.0},
+            "openai/gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
+            "openai/gpt-3.5-turbo-16k": {"input": 3.0, "output": 4.0},
+            "deepseek/deepseek-chat": {"input": 0.27, "output": 1.1},
+            "deepseek/deepseek-reasoner": {"input": 0.55, "output": 2.19},
         }
-        model_pricing = pricing.get(model, {"input": 0.14, "output": 0.28})
+        model_pricing = pricing.get(model, {"input": 1.0, "output": 2.0})
         input_cost = (prompt_tokens / 1_000_000) * model_pricing["input"]
         output_cost = (completion_tokens / 1_000_000) * model_pricing["output"]
         return round(input_cost + output_cost, 6)

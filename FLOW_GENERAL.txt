@@ -1,0 +1,119 @@
+LUMINAL — END-TO-END GENERAL FLOW
+=================================
+
+This describes how a single prompt TRAVELS through the entire system,
+plus how data flows for login, dashboards, and API usage.
+
+
+1) YOU OPEN THE DASHBOARD
+-------------------------
+Browser  ──GET / (Next.js)──▶  Dashboard UI (port 3000)
+
+The UI is a single-page React app (App Router, client component).
+On first visit it shows a login screen.
+
+  Login  ──POST /auth/login (username+password)──▶  Backend (port 8000)
+     Backend hashes password (SHA256) and compares with DB
+     → issues a JWT  { sub: user_id }  signed with SECRET_KEY
+     ← returns { access_token }
+
+  Browser stores token in localStorage → reloads app
+  App now authenticates every API call with:
+     Authorization: Bearer <jwt>
+
+
+2) DASHBOARD LOADS DATA (6 parallel requests)
+---------------------------------------------
+Browser ──▶ Backend ──▶ SQLite (luminal.db)
+
+  GET /dashboard/stats          → totals: today & month, cost by model
+  GET /dashboard/logs?limit=60  → recent ExecutionLog rows
+  GET /dashboard/budget         → spend, limit, thresholds
+  GET /dashboard/cost-breakdown → per-day cost/requests (30 days)
+  GET /dashboard/model-performance → cost/latency/quality per model
+  GET /dashboard/rag-stats      → RAG vs tool usage percentages
+  GET /api-keys                 → list of API keys
+
+All responses come back as JSON, the UI animates them in (staggered cards,
+count-up numbers, SVG chart draw, progress rings) and auto-refreshes every 45s.
+
+
+3) YOU SEND A PROMPT
+--------------------
+Browser ──POST /route {prompt, api_key:""} + JWT──▶ Backend
+
+   a. JWT is decoded → user resolved (user_id=1 admin).
+   b. Budget checked → if over limit: HTTP 402.
+   c. session_id generated  (user_1_ab12cd34...)
+   d. LangGraph agent pipeline runs (in-memory, per session):
+
+        analyze  → complexity score (low/medium/high)
+        retrieve → RAG if keywords match:
+                     query → embed → vector store (Chroma) → top chunks
+                     chunks + citations prepended to prompt
+        tool     → if tool keywords match (weather, db, web...):
+                     run MCP tool → result appended as system context
+        route    → pick model config from DB:
+                     low→claude-3-haiku, medium→gpt-4o-mini, high→gpt-4o
+                     (budget-aware downgrades at 80% / 95% thresholds)
+        generate → HTTP call to provider:
+                     prompt+context ──▶ OpenRouter / OpenAI / Anthropic /
+                                       DeepSeek / Ollama
+                     provider model returns generated text + token usage
+        critic   → score response; regenerate with stronger model if poor
+        approval → pause for human approval on risky tool actions
+        error_recovery → retry with lower temperature on failures
+
+   e. Every node writes a trace event into the in-memory agent state:
+        { node, action, timestamp, data }
+   f. After the pipeline: an ExecutionLog row is saved to SQLite
+        (prompt, model, tokens, cost, latency, complexity, RAG/tool metadata)
+   g. The cost is added to the user's current_spend (budget tracking)
+   h. ← HTTP 200 JSON:
+        { content, model, complexity, tokens_used, cost, latency_ms, session_id }
+
+   Meanwhile the UI, as soon as it gets session_id, opens:
+
+   Browser ──GET /route/trace/<session_id> (SSE stream)──▶ Backend
+        Backend polls the agent state and pushes each trace event
+        as Server-Sent Events:  data: {node, action, ...}\n\n
+        UI renders each event live as a color-coded terminal line.
+        Stream closes when the agent sets completed_at.
+
+
+4) THE RESPONSE REACHES THE UI
+------------------------------
+The UI shows:
+  - the final answer (in the response card with model/cost/tokens/latency badges)
+  - the full agent trace in the terminal panel
+  - the dashboard stats/logs refresh automatically (new row appears in logs)
+
+
+5) DEVELOPERS USING THE API
+---------------------------
+Developer App ──POST /route {prompt, api_key:"lum_..."}──▶ Backend
+   JWT absent → falls back to the API key → hashed key matched in DB → user resolved
+   Same agent pipeline runs → same response shape
+   (Rate limiting via Redis — if Redis is down, requests pass through.)
+
+
+DATA AT REST (SQLite)
+---------------------
+users          — email, hashed password, budget, spend
+model_configs  — complexity → model/provider mapping per user
+api_keys       — hashed API keys
+execution_logs — every request: prompt, model, tokens, cost, latency,
+                 complexity, quality score, errors, RAG/tool metadata
+
+OPTIONAL EXTERNAL SERVICES (all lazy; app works without them locally)
+--------------------------------------------------------------------
+  Redis    — caching + rate limiting (skipped gracefully if down)
+  Chroma   — vector store for RAG (used only on keyword-matching prompts)
+  MCP tools— in-process tool registry (weather, db, etc.)
+
+
+ONE-LINE SUMMARY
+----------------
+  UI → JWT → FastAPI → LangGraph (analyze→retrieve→tool→route→generate→critic)
+  → provider LLM → response + tokens → SQLite log + budget → JSON to UI
+  → SSE trace stream renders live in the terminal panel.

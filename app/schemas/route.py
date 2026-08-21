@@ -5,7 +5,7 @@ from datetime import datetime
 
 class RouteRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
-    api_key: str = Field(..., min_length=1)
+    api_key: Optional[str] = Field(default="", description="Optional API key (dashboard uses JWT bearer token instead)")
 
 
 class RouteResponse(BaseModel):

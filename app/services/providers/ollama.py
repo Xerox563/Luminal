@@ -4,6 +4,7 @@ import json
 from typing import AsyncGenerator
 from app.services.providers.base import LLMProvider
 from app.core.config import settings
+from app.services import runtime_settings
 
 
 class OllamaProvider(LLMProvider):
@@ -16,7 +17,7 @@ class OllamaProvider(LLMProvider):
         return ["llama3.1", "llama3", "mistral", "codellama", "phi3", "gemma2"]
 
     def _get_base_url(self) -> str:
-        return settings.ollama_base_url or "http://localhost:11434"
+        return runtime_settings.get_setting("ollama_base_url") or settings.ollama_base_url or "http://localhost:11434"
 
     async def chat_completion(
         self,

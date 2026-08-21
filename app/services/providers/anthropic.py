@@ -4,6 +4,7 @@ import json
 from typing import AsyncGenerator
 from app.services.providers.base import LLMProvider
 from app.core.config import settings
+from app.services import runtime_settings
 
 
 class AnthropicProvider(LLMProvider):
@@ -19,10 +20,10 @@ class AnthropicProvider(LLMProvider):
         ]
 
     def _get_api_key(self) -> str:
-        return settings.anthropic_api_key or settings.openrouter_api_key
+        return runtime_settings.get_setting("anthropic_api_key") or settings.anthropic_api_key or settings.openrouter_api_key
 
     def _get_base_url(self) -> str:
-        return settings.anthropic_base_url or "https://api.anthropic.com/v1"
+        return runtime_settings.get_setting("anthropic_base_url") or settings.anthropic_base_url or "https://api.anthropic.com/v1"
 
     def _convert_messages(self, messages: list[dict]) -> tuple[str, list[dict]]:
         system = ""

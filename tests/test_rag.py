@@ -5,6 +5,12 @@ from app.services.vector_store.base import DocumentChunk, VectorStoreRegistry
 from app.services.rag import inject_context, needs_rag, format_response_with_citations
 from app.services.tool_calling import decide_tool_call, ToolCallDecision
 from app.services.tool_execution import process_tool_calls, format_tool_results, ToolExecutionResult
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@pytest.fixture
+def mock_db():
+    return AsyncMock(spec=AsyncSession)
 
 
 @pytest.fixture
@@ -21,6 +27,40 @@ def mock_chunks():
             content="France is a country in Europe.",
             metadata={"filename": "france.txt", "user_id": 1, "chunk_index": 1},
             score=0.85
+        )
+    ]
+
+
+@pytest.fixture
+def mock_tools():
+    from app.models import MCPToolConfig
+    return [
+        MCPToolConfig(
+            id=1,
+            user_id=1,
+            name="get_weather",
+            description="Get weather",
+            endpoint_url="https://api.weather.com",
+            trigger_keywords=["weather", "temperature"],
+            is_active=True
+        ),
+        MCPToolConfig(
+            id=2,
+            user_id=1,
+            name="calculate",
+            description="Calculate math",
+            endpoint_url="https://api.calc.com",
+            trigger_keywords=["calculate", "math"],
+            is_active=True
+        ),
+        MCPToolConfig(
+            id=3,
+            user_id=1,
+            name="search_web",
+            description="Search web",
+            endpoint_url="https://api.search.com",
+            trigger_keywords=["search", "find"],
+            is_active=True
         )
     ]
 
@@ -54,34 +94,42 @@ async def test_format_response_with_citations():
 
 
 @pytest.mark.asyncio
-async def test_decide_tool_call_weather():
-    decision = await decide_tool_call("What is the weather in Paris?")
-    assert decision.should_call is True
-    assert decision.tool_name == "get_weather"
-    assert decision.confidence >= 0.5
+async def test_decide_tool_call_weather(mock_db, mock_tools):
+    with patch('app.services.tool_calling.get_active_mcp_tools') as mock_get_tools:
+        mock_get_tools.return_value = mock_tools
+        decision = await decide_tool_call(mock_db, 1, "What is the weather in Paris?")
+        assert decision.should_call is True
+        assert decision.tool_name == "get_weather"
+        assert decision.confidence >= 0.5
 
 
 @pytest.mark.asyncio
-async def test_decide_tool_call_calculate():
-    decision = await decide_tool_call("Calculate 2 + 2")
-    assert decision.should_call is True
-    assert decision.tool_name == "calculate"
-    assert decision.confidence >= 0.5
+async def test_decide_tool_call_calculate(mock_db, mock_tools):
+    with patch('app.services.tool_calling.get_active_mcp_tools') as mock_get_tools:
+        mock_get_tools.return_value = mock_tools
+        decision = await decide_tool_call(mock_db, 1, "Calculate 2 + 2")
+        assert decision.should_call is True
+        assert decision.tool_name == "calculate"
+        assert decision.confidence >= 0.5
 
 
 @pytest.mark.asyncio
-async def test_decide_tool_call_search():
-    decision = await decide_tool_call("Search for latest AI news")
-    assert decision.should_call is True
-    assert decision.tool_name == "search_web"
-    assert decision.confidence > 0.5
+async def test_decide_tool_call_search(mock_db, mock_tools):
+    with patch('app.services.tool_calling.get_active_mcp_tools') as mock_get_tools:
+        mock_get_tools.return_value = mock_tools
+        decision = await decide_tool_call(mock_db, 1, "Search for latest AI news")
+        assert decision.should_call is True
+        assert decision.tool_name == "search_web"
+        assert decision.confidence >= 0.5
 
 
 @pytest.mark.asyncio
-async def test_decide_tool_call_no_tool():
-    decision = await decide_tool_call("Write a poem about cats")
-    assert decision.should_call is False
-    assert decision.tool_name is None
+async def test_decide_tool_call_no_tool(mock_db, mock_tools):
+    with patch('app.services.tool_calling.get_active_mcp_tools') as mock_get_tools:
+        mock_get_tools.return_value = mock_tools
+        decision = await decide_tool_call(mock_db, 1, "Write a poem about cats")
+        assert decision.should_call is False
+        assert decision.tool_name is None
 
 
 @pytest.mark.asyncio
@@ -160,40 +208,46 @@ async def test_inject_context_with_chunks(mock_chunks):
 
 
 @pytest.mark.asyncio
-async def test_process_tool_calls_no_tool():
-    with patch('app.services.tool_calling.decide_tool_call') as mock_decide:
-        mock_decide.return_value = ToolCallDecision(
-            should_call=False,
-            tool_name=None,
-            arguments={},
-            confidence=0.0,
-            reasoning="No tool needed"
-        )
+async def test_process_tool_calls_no_tool(mock_db, mock_tools):
+    with patch('app.services.tool_calling.get_active_mcp_tools') as mock_get_tools:
+        mock_get_tools.return_value = mock_tools
         
-        results = await process_tool_calls("Write a poem")
-        assert results == []
+        with patch('app.services.tool_calling.decide_tool_call') as mock_decide:
+            mock_decide.return_value = ToolCallDecision(
+                should_call=False,
+                tool_name=None,
+                arguments={},
+                confidence=0.0,
+                reasoning="No tool needed"
+            )
+            
+            results = await process_tool_calls(mock_db, 1, "Write a poem")
+            assert results == []
 
 
 @pytest.mark.asyncio
-async def test_process_tool_calls_with_tool():
-    with patch('app.services.tool_calling.decide_tool_call') as mock_decide:
-        mock_decide.return_value = ToolCallDecision(
-            should_call=True,
-            tool_name="calculate",
-            arguments={"expression": "2 + 2"},
-            confidence=0.8,
-            reasoning="Math calculation detected"
-        )
+async def test_process_tool_calls_with_tool(mock_db, mock_tools):
+    with patch('app.services.tool_calling.get_active_mcp_tools') as mock_get_tools:
+        mock_get_tools.return_value = mock_tools
         
-        with patch('app.services.tool_execution.execute_tool_call') as mock_execute:
-            mock_execute.return_value = ToolExecutionResult(
+        with patch('app.services.tool_calling.decide_tool_call') as mock_decide:
+            mock_decide.return_value = ToolCallDecision(
+                should_call=True,
                 tool_name="calculate",
-                success=True,
-                result={"expression": "2 + 2", "result": 4},
-                arguments={"expression": "2 + 2"}
+                arguments={"expression": "2 + 2"},
+                confidence=0.8,
+                reasoning="Math calculation detected"
             )
             
-            results = await process_tool_calls("Calculate 2 + 2")
-            assert len(results) == 1
-            assert results[0].tool_name == "calculate"
-            assert results[0].success is True
+            with patch('app.services.tool_execution.execute_tool_call') as mock_execute:
+                mock_execute.return_value = ToolExecutionResult(
+                    tool_name="calculate",
+                    success=True,
+                    result={"expression": "2 + 2", "result": 4},
+                    arguments={"expression": "2 + 2"}
+                )
+                
+                results = await process_tool_calls(mock_db, 1, "Calculate 2 + 2")
+                assert len(results) == 1
+                assert results[0].tool_name == "calculate"
+                assert results[0].success is True

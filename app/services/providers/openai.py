@@ -4,6 +4,7 @@ import json
 from typing import AsyncGenerator
 from app.services.providers.base import LLMProvider
 from app.core.config import settings
+from app.services import runtime_settings
 
 
 class OpenAIProvider(LLMProvider):
@@ -19,10 +20,10 @@ class OpenAIProvider(LLMProvider):
         ]
 
     def _get_api_key(self) -> str:
-        return settings.openai_api_key or settings.openrouter_api_key
+        return runtime_settings.get_setting("openai_api_key") or settings.openai_api_key or settings.openrouter_api_key
 
     def _get_base_url(self) -> str:
-        return settings.openai_base_url or "https://api.openai.com/v1"
+        return runtime_settings.get_setting("openai_base_url") or settings.openai_base_url or "https://api.openai.com/v1"
 
     async def chat_completion(
         self,
