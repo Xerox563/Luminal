@@ -349,8 +349,42 @@ async def route_prompt_stream(
 
 
 @router.get("/trace/{session_id}")
-async def stream_trace(session_id: str):
-    """Stream live trace events for a session."""
+async def stream_trace(
+    session_id: str,
+    request: Request,
+    token: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream live trace events for a session.
+
+    Browsers' EventSource can't send custom headers, so the dashboard passes
+    the JWT/API key as a `token` query param here instead of Authorization —
+    this also lets watching a session started elsewhere (e.g. a curl request
+    using a lum_ API key) work, not just ones the playground itself started.
+    """
+    auth_token = token
+    if not auth_token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+
+    user = None
+    if auth_token:
+        if auth_token.startswith("lum_"):
+            user = await get_current_user_from_api_key(auth_token, db)
+        else:
+            try:
+                payload = decode_token(auth_token)
+                user_id = payload.get("sub")
+                if user_id:
+                    result = await db.execute(select(User).where(User.id == int(user_id)))
+                    user = result.scalar_one_or_none()
+            except Exception:
+                user = None
+
+    if not user or not session_id.startswith(f"user_{user.id}_"):
+        raise HTTPException(status_code=404, detail="Session not found")
+
     async def event_generator():
         last_trace_len = 0
         while True:

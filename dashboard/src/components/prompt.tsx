@@ -148,6 +148,7 @@ export function PromptSection({
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(true);
+  const [watchInput, setWatchInput] = useState("");
   const [providerSaving, setProviderSaving] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const terminalRef = useRef<HTMLDivElement | null>(null);
@@ -193,7 +194,10 @@ export function PromptSection({
     esRef.current?.close();
     setTrace([]);
     setSessionId(sid);
-    const es = new EventSource(`${API_URL}/route/trace/${sid}`);
+    // EventSource can't send an Authorization header, so the token goes as
+    // a query param instead — this is also what lets watching a session
+    // started elsewhere (e.g. a curl request with a lum_ API key) work.
+    const es = new EventSource(`${API_URL}/route/trace/${sid}?token=${encodeURIComponent(token)}`);
     esRef.current = es;
     es.onmessage = (ev) => {
       try {
@@ -683,6 +687,55 @@ export function PromptSection({
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.35, ease: easeOutExpo }}
             >
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (watchInput.trim()) connectTrace(watchInput.trim());
+                }}
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  padding: "10px 16px",
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <input
+                  value={watchInput}
+                  onChange={(e) => setWatchInput(e.target.value)}
+                  placeholder="Watch another session_id (e.g. from an external API call)…"
+                  style={{
+                    flex: 1,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    background: "#0c0c12",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#d4d4d8",
+                    fontSize: 11,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    outline: "none",
+                  }}
+                />
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  type="submit"
+                  disabled={!watchInput.trim()}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    border: "none",
+                    cursor: "pointer",
+                    background: "rgba(99,102,241,0.15)",
+                    color: "#a5b4fc",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    fontFamily: "inherit",
+                    opacity: watchInput.trim() ? 1 : 0.5,
+                  }}
+                >
+                  Watch
+                </motion.button>
+              </form>
               <div
                 ref={terminalRef}
                 className="terminal-scroll"
