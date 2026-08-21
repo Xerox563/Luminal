@@ -119,11 +119,20 @@ async def route_prompt(
     # Extract response from agent state
     response_content = result.get("response", "")
     model_used = result.get("selected_model", "unknown")
+    selected_provider = result.get("selected_provider", "openrouter")
     complexity = result.get("complexity")
+    prompt_tokens = result.get("prompt_tokens", 0)
+    completion_tokens = result.get("completion_tokens", 0)
     tokens_used = result.get("tokens_used", 0)
     cost = result.get("cost", 0.0)
     latency_ms = result.get("latency_ms", 0)
+    quality_score = result.get("quality_score")
     error = result.get("error")
+    
+    used_rag = result.get("used_rag", False)
+    citations = result.get("citations", [])
+    tools_used = result.get("tools_used", [])
+    tool_results = result.get("tool_results", [])
     
     if error:
         raise HTTPException(status_code=500, detail=f"Agent execution failed: {error}")
@@ -133,25 +142,32 @@ async def route_prompt(
         user_id=user.id,
         prompt=body.prompt,
         model_used=model_used,
-        provider="openrouter",
+        provider=selected_provider,
         complexity=complexity,
-        prompt_tokens=0,
-        completion_tokens=tokens_used,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
         total_tokens=tokens_used,
         cost=cost,
         latency_ms=latency_ms,
+        quality_score=quality_score,
         error_message=error,
-        retrieval_metadata=result.get("retrieval_metadata"),
-        tool_metadata=result.get("tool_metadata")
+        retrieval_metadata={"used_rag": used_rag, "citations": citations} if used_rag else None,
+        tool_metadata={"tools_used": tools_used, "tool_calls": tool_results} if tools_used else None
     )
     db.add(log)
     await add_spend(db, user.id, cost)
     await db.commit()
     
+    complexity_str = complexity
+    if hasattr(complexity, 'value'):
+        complexity_str = complexity.value
+    elif complexity is None:
+        complexity_str = "low"
+    
     return RouteResponse(
         content=response_content,
         model=model_used,
-        complexity=complexity.value if complexity else "low",
+        complexity=complexity_str,
         tokens_used=tokens_used,
         cost=cost,
         latency_ms=latency_ms,
