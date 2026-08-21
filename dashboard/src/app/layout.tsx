@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Luminal — Intelligent LLM Routing',
-  description: 'AI gateway with live agent trace visualization',
+  title: 'Luminal — The cheapest LLM that can actually answer',
+  description: 'Self-hosted AI gateway. Scores every prompt, retrieves context, calls tools, picks the right model, and logs everything for cost & quality analytics.',
 }
 
 export default function RootLayout({
