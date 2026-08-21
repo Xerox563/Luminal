@@ -10,17 +10,19 @@ interface SettingsMap {
   openai_api_key: string;
   anthropic_api_key: string;
   deepseek_api_key: string;
+  nvidia_api_key: string;
   openrouter_base_url: string;
   openai_base_url: string;
   anthropic_base_url: string;
   deepseek_base_url: string;
+  nvidia_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
   default_provider: "openrouter" | "ollama";
 }
 
 const PROVIDER_KEYS: Array<keyof SettingsMap> = [
-  "openrouter_api_key", "openai_api_key", "anthropic_api_key", "deepseek_api_key",
+  "openrouter_api_key", "openai_api_key", "anthropic_api_key", "deepseek_api_key", "nvidia_api_key",
 ];
 
 const FIELDS: Array<{ key: keyof SettingsMap; label: string; hint: string; secret?: boolean }> = [
@@ -28,6 +30,7 @@ const FIELDS: Array<{ key: keyof SettingsMap; label: string; hint: string; secre
   { key: "openai_api_key", label: "OpenAI", hint: "sk-... (GPT models)", secret: true },
   { key: "anthropic_api_key", label: "Anthropic", hint: "sk-ant-... (Claude models)", secret: true },
   { key: "deepseek_api_key", label: "DeepSeek", hint: "DeepSeek models", secret: true },
+  { key: "nvidia_api_key", label: "NVIDIA", hint: "NVIDIA NIM API (Llama, Nemotron, Mixtral)", secret: true },
 ];
 
 function maskValue(value: string): string {

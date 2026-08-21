@@ -102,7 +102,7 @@ AGENT PIPELINE (LangGraph StateGraph) — nodes in order:
   4. route     -> picks the model config matching the complexity (budget-aware:
                   80% -> downgrade one step, 95% -> cheapest model)
   5. generate  -> checks the Redis response cache, then calls the provider
-                  (OpenRouter/OpenAI/Anthropic/DeepSeek/Ollama) with retry +
+                  (OpenRouter/OpenAI/Anthropic/DeepSeek/NVIDIA/Ollama) with retry +
                   backoff; on a 402 from a cloud provider, falls back once to
                   local Ollama
   6. critic    -> optionally scores the response; if low quality, regenerates

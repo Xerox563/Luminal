@@ -26,10 +26,12 @@ interface SettingsMap {
   openai_api_key: string;
   anthropic_api_key: string;
   deepseek_api_key: string;
+  nvidia_api_key: string;
   openrouter_base_url: string;
   openai_base_url: string;
   anthropic_base_url: string;
   deepseek_base_url: string;
+  nvidia_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
   default_provider: "openrouter" | "ollama";
@@ -47,10 +49,12 @@ const EMPTY_SETTINGS: SettingsMap = {
   openai_api_key: "",
   anthropic_api_key: "",
   deepseek_api_key: "",
+  nvidia_api_key: "",
   openrouter_base_url: "",
   openai_base_url: "",
   anthropic_base_url: "",
   deepseek_base_url: "",
+  nvidia_base_url: "",
   ollama_base_url: "",
   use_llm_complexity: "false",
   default_provider: "ollama",

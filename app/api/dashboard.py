@@ -36,10 +36,12 @@ class SettingsUpdate(BaseModel):
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None
+    nvidia_api_key: Optional[str] = None
     openrouter_base_url: Optional[str] = None
     openai_base_url: Optional[str] = None
     anthropic_base_url: Optional[str] = None
     deepseek_base_url: Optional[str] = None
+    nvidia_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
     use_llm_complexity: Optional[bool] = None
     default_provider: Optional[str] = None

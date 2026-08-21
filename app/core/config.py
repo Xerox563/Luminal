@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     anthropic_base_url: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     deepseek_base_url: Optional[str] = None
+    nvidia_api_key: Optional[str] = None
+    nvidia_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
     default_provider: str = "ollama"
     use_llm_complexity: bool = False

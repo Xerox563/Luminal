@@ -13,6 +13,7 @@ PROVIDER_KEYS = [
     "openai_api_key",
     "anthropic_api_key",
     "deepseek_api_key",
+    "nvidia_api_key",
 ]
 
 BASE_URLS = [
@@ -20,6 +21,7 @@ BASE_URLS = [
     "openai_base_url",
     "anthropic_base_url",
     "deepseek_base_url",
+    "nvidia_base_url",
     "ollama_base_url",
 ]
 
