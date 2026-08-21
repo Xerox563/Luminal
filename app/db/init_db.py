@@ -9,8 +9,11 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Create default admin user if not exists
-    async with AsyncSession(engine) as db:
+    # Create default admin user if not exists.
+    # expire_on_commit=False: without it, accessing admin.id right after
+    # commit() below triggers a lazy-refresh that needs IO outside of an
+    # active greenlet context and crashes app startup on a fresh database.
+    async with AsyncSession(engine, expire_on_commit=False) as db:
         from sqlalchemy import select
         result = await db.execute(select(User).where(User.email == "admin@admin.com"))
         admin = result.scalar_one_or_none()

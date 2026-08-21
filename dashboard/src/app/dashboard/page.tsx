@@ -34,7 +34,7 @@ interface SettingsMap {
   nvidia_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
-  default_provider: "openrouter" | "ollama";
+  default_provider: "openrouter" | "ollama" | "nvidia";
 }
 import { CostTrendChart, BudgetPanel } from "@/components/charts";
 import { RagPanel, ModelPerfPanel } from "@/components/panels";

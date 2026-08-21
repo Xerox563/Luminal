@@ -19,10 +19,10 @@ interface SettingsMap {
   nvidia_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
-  default_provider: "openrouter" | "ollama";
+  default_provider: "openrouter" | "ollama" | "nvidia";
 }
 
-type ProviderMode = "openrouter" | "ollama";
+type ProviderMode = "openrouter" | "ollama" | "nvidia";
 
 // ─── Prompt Tester + Live Trace Terminal ──────────────────────────────────
 export function PromptSection({
@@ -65,6 +65,8 @@ export function PromptSection({
       notify(
         next === "ollama"
           ? "Switched to Local (Ollama) — runs models on your laptop, free, no API key needed"
+          : next === "nvidia"
+          ? "Switched to NVIDIA — uses NVIDIA NIM-hosted models"
           : "Switched to Cloud (OpenRouter) — uses best-in-class cloud models"
       );
     } catch (e) {
@@ -192,10 +194,14 @@ export function PromptSection({
             background:
               currentProvider === "ollama"
                 ? "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(16,185,129,0.04))"
+                : currentProvider === "nvidia"
+                ? "linear-gradient(135deg, rgba(118,185,0,0.1), rgba(118,185,0,0.03))"
                 : "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.04))",
             border:
               currentProvider === "ollama"
                 ? "1px solid rgba(52,211,153,0.2)"
+                : currentProvider === "nvidia"
+                ? "1px solid rgba(118,185,0,0.25)"
                 : "1px solid rgba(99,102,241,0.2)",
           }}
         >
@@ -291,6 +297,40 @@ export function PromptSection({
                 </svg>
                 Cloud (OpenRouter)
               </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => switchProvider("nvidia")}
+                disabled={providerSaving}
+                title="NVIDIA: Uses NVIDIA's NIM-hosted API. Requires an NVIDIA API key set in Settings."
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  fontWeight: 700,
+                  transition: "all 0.2s",
+                  background:
+                    currentProvider === "nvidia"
+                      ? "linear-gradient(135deg, #76b900, #567800)"
+                      : "transparent",
+                  color: currentProvider === "nvidia" ? "white" : "#71717a",
+                  boxShadow:
+                    currentProvider === "nvidia"
+                      ? "0 2px 12px rgba(118,185,0,0.35)"
+                      : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M4 4l16 16M4 12h16M4 20L20 4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                NVIDIA
+              </motion.button>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -299,8 +339,8 @@ export function PromptSection({
                 width: 7,
                 height: 7,
                 borderRadius: "50%",
-                background: currentProvider === "ollama" ? "#10b981" : "#818cf8",
-                boxShadow: `0 0 8px ${currentProvider === "ollama" ? "#10b981" : "#818cf8"}`,
+                background: currentProvider === "ollama" ? "#10b981" : currentProvider === "nvidia" ? "#76b900" : "#818cf8",
+                boxShadow: `0 0 8px ${currentProvider === "ollama" ? "#10b981" : currentProvider === "nvidia" ? "#76b900" : "#818cf8"}`,
               }}
             />
             <span style={{ fontSize: 11, color: "#71717a", maxWidth: 240 }}>
@@ -308,6 +348,13 @@ export function PromptSection({
                 <>
                   Running on your laptop — <b style={{ color: "#34d399" }}>free</b>. Make sure{" "}
                   <code style={{ fontSize: 10, color: "#a78bfa", background: "rgba(167,139,250,0.08)", padding: "1px 5px", borderRadius: 4 }}>ollama serve</code> is running.
+                </>
+              ) : currentProvider === "nvidia" ? (
+                <>
+                  Uses <b style={{ color: "#a3e635" }}>NVIDIA</b> NIM-hosted models.
+                  {!settings.nvidia_api_key && (
+                    <span style={{ color: "#fbbf24" }}> ⚠ No API key set</span>
+                  )}
                 </>
               ) : (
                 <>

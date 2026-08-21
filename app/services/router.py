@@ -20,9 +20,21 @@ OPENROUTER_DEFAULTS = {
     ComplexityLevel.HIGH: {"model_name": "openai/o3-mini", "is_default": False},
 }
 
+NVIDIA_DEFAULTS = {
+    ComplexityLevel.LOW: {"model_name": "meta/llama-3.1-8b-instruct", "is_default": True},
+    ComplexityLevel.MEDIUM: {"model_name": "meta/llama-3.1-70b-instruct", "is_default": False},
+    ComplexityLevel.HIGH: {"model_name": "meta/llama-3.1-405b-instruct", "is_default": False},
+}
+
+PROVIDER_DEFAULTS = {
+    "ollama": OLLAMA_DEFAULTS,
+    "openrouter": OPENROUTER_DEFAULTS,
+    "nvidia": NVIDIA_DEFAULTS,
+}
+
 
 async def ensure_model_configs_for_provider(db: AsyncSession, user_id: int, provider: str) -> None:
-    defaults = OLLAMA_DEFAULTS if provider == "ollama" else OPENROUTER_DEFAULTS
+    defaults = PROVIDER_DEFAULTS.get(provider, OPENROUTER_DEFAULTS)
     for complexity, cfg in defaults.items():
         existing = await get_model_for_complexity(db, user_id, complexity, provider_filter=provider)
         if not existing:
@@ -130,7 +142,7 @@ async def route_request(
         model_config = await get_default_model(db, user_id)
 
     if not model_config:
-        defaults = OLLAMA_DEFAULTS if default_provider == "ollama" else OPENROUTER_DEFAULTS
+        defaults = PROVIDER_DEFAULTS.get(default_provider, OPENROUTER_DEFAULTS)
         fallback_cfg = defaults[complexity]
         fallback = ModelConfig(
             user_id=user_id,

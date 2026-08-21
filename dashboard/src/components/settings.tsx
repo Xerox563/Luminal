@@ -18,7 +18,7 @@ interface SettingsMap {
   nvidia_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
-  default_provider: "openrouter" | "ollama";
+  default_provider: "openrouter" | "ollama" | "nvidia";
 }
 
 const PROVIDER_KEYS: Array<keyof SettingsMap> = [
@@ -333,6 +333,25 @@ export function SettingsSection({
                 title="Ollama (local models, free, no API key needed)"
               >
                 Ollama
+              </button>
+              <button
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: settings.default_provider === "nvidia"
+                    ? "rgba(118, 185, 0, 0.2)"
+                    : "rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  color: settings.default_provider === "nvidia" ? "#a3e635" : "#a1a1aa",
+                  transition: "all 0.2s",
+                }}
+                onClick={() => setVal("default_provider", "nvidia")}
+                title="NVIDIA (NIM-hosted models, requires NVIDIA API key)"
+              >
+                NVIDIA
               </button>
             </div>
           </div>
