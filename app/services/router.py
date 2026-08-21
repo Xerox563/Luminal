@@ -26,10 +26,24 @@ NVIDIA_DEFAULTS = {
     ComplexityLevel.HIGH: {"model_name": "meta/llama-3.1-405b-instruct", "is_default": False},
 }
 
+MISTRAL_DEFAULTS = {
+    ComplexityLevel.LOW: {"model_name": "mistral-small-latest", "is_default": True},
+    ComplexityLevel.MEDIUM: {"model_name": "mistral-medium-latest", "is_default": False},
+    ComplexityLevel.HIGH: {"model_name": "mistral-large-latest", "is_default": False},
+}
+
+GEMINI_DEFAULTS = {
+    ComplexityLevel.LOW: {"model_name": "gemini-2.0-flash", "is_default": True},
+    ComplexityLevel.MEDIUM: {"model_name": "gemini-2.5-flash", "is_default": False},
+    ComplexityLevel.HIGH: {"model_name": "gemini-2.5-pro", "is_default": False},
+}
+
 PROVIDER_DEFAULTS = {
     "ollama": OLLAMA_DEFAULTS,
     "openrouter": OPENROUTER_DEFAULTS,
     "nvidia": NVIDIA_DEFAULTS,
+    "mistral": MISTRAL_DEFAULTS,
+    "gemini": GEMINI_DEFAULTS,
 }
 
 

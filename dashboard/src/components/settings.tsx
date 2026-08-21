@@ -11,18 +11,23 @@ interface SettingsMap {
   anthropic_api_key: string;
   deepseek_api_key: string;
   nvidia_api_key: string;
+  mistral_api_key: string;
+  gemini_api_key: string;
   openrouter_base_url: string;
   openai_base_url: string;
   anthropic_base_url: string;
   deepseek_base_url: string;
   nvidia_base_url: string;
+  mistral_base_url: string;
+  gemini_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
-  default_provider: "openrouter" | "ollama" | "nvidia";
+  default_provider: "openrouter" | "ollama" | "nvidia" | "mistral" | "gemini";
 }
 
 const PROVIDER_KEYS: Array<keyof SettingsMap> = [
   "openrouter_api_key", "openai_api_key", "anthropic_api_key", "deepseek_api_key", "nvidia_api_key",
+  "mistral_api_key", "gemini_api_key",
 ];
 
 const FIELDS: Array<{ key: keyof SettingsMap; label: string; hint: string; secret?: boolean }> = [
@@ -31,6 +36,8 @@ const FIELDS: Array<{ key: keyof SettingsMap; label: string; hint: string; secre
   { key: "anthropic_api_key", label: "Anthropic", hint: "sk-ant-... (Claude models)", secret: true },
   { key: "deepseek_api_key", label: "DeepSeek", hint: "DeepSeek models", secret: true },
   { key: "nvidia_api_key", label: "NVIDIA", hint: "NVIDIA NIM API (Llama, Nemotron, Mixtral)", secret: true },
+  { key: "mistral_api_key", label: "Mistral", hint: "Mistral AI models", secret: true },
+  { key: "gemini_api_key", label: "Gemini", hint: "Google Gemini models", secret: true },
 ];
 
 function maskValue(value: string): string {
@@ -352,6 +359,44 @@ export function SettingsSection({
                 title="NVIDIA (NIM-hosted models, requires NVIDIA API key)"
               >
                 NVIDIA
+              </button>
+              <button
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: settings.default_provider === "mistral"
+                    ? "rgba(250, 80, 10, 0.2)"
+                    : "rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  color: settings.default_provider === "mistral" ? "#fb923c" : "#a1a1aa",
+                  transition: "all 0.2s",
+                }}
+                onClick={() => setVal("default_provider", "mistral")}
+                title="Mistral (requires Mistral API key)"
+              >
+                Mistral
+              </button>
+              <button
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: settings.default_provider === "gemini"
+                    ? "rgba(66, 133, 244, 0.2)"
+                    : "rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  color: settings.default_provider === "gemini" ? "#8ab4f8" : "#a1a1aa",
+                  transition: "all 0.2s",
+                }}
+                onClick={() => setVal("default_provider", "gemini")}
+                title="Gemini (requires Gemini API key)"
+              >
+                Gemini
               </button>
             </div>
           </div>

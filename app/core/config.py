@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     deepseek_base_url: Optional[str] = None
     nvidia_api_key: Optional[str] = None
     nvidia_base_url: Optional[str] = None
+    mistral_api_key: Optional[str] = None
+    mistral_base_url: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+    gemini_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
     default_provider: str = "ollama"
     use_llm_complexity: bool = False

@@ -14,6 +14,8 @@ PROVIDER_KEYS = [
     "anthropic_api_key",
     "deepseek_api_key",
     "nvidia_api_key",
+    "mistral_api_key",
+    "gemini_api_key",
 ]
 
 BASE_URLS = [
@@ -22,6 +24,8 @@ BASE_URLS = [
     "anthropic_base_url",
     "deepseek_base_url",
     "nvidia_base_url",
+    "mistral_base_url",
+    "gemini_base_url",
     "ollama_base_url",
 ]
 

@@ -12,17 +12,120 @@ interface SettingsMap {
   anthropic_api_key: string;
   deepseek_api_key: string;
   nvidia_api_key: string;
+  mistral_api_key: string;
+  gemini_api_key: string;
   openrouter_base_url: string;
   openai_base_url: string;
   anthropic_base_url: string;
   deepseek_base_url: string;
   nvidia_base_url: string;
+  mistral_base_url: string;
+  gemini_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
-  default_provider: "openrouter" | "ollama" | "nvidia";
+  default_provider: "openrouter" | "ollama" | "nvidia" | "mistral" | "gemini";
 }
 
-type ProviderMode = "openrouter" | "ollama" | "nvidia";
+type ProviderMode = "openrouter" | "ollama" | "nvidia" | "mistral" | "gemini";
+
+const PROVIDER_META: Record<
+  ProviderMode,
+  {
+    label: string;
+    title: string;
+    color: string;
+    gradient: string;
+    panelBg: string;
+    panelBorder: string;
+    apiKeyField?: keyof SettingsMap;
+    hint: React.ReactNode;
+    icon: React.ReactNode;
+  }
+> = {
+  ollama: {
+    label: "Local (Ollama)",
+    title: "Local: Uses Ollama running on your laptop. Free, no API key. Requires: `ollama serve` + `ollama pull mistral`",
+    color: "#10b981",
+    gradient: "linear-gradient(135deg, #10b981, #059669)",
+    panelBg: "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(16,185,129,0.04))",
+    panelBorder: "1px solid rgba(52,211,153,0.2)",
+    hint: (
+      <>
+        Running on your laptop — <b style={{ color: "#34d399" }}>free</b>. Make sure{" "}
+        <code style={{ fontSize: 10, color: "#a78bfa", background: "rgba(167,139,250,0.08)", padding: "1px 5px", borderRadius: 4 }}>ollama serve</code> is running.
+      </>
+    ),
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinejoin="round" />
+        <path d="M2 17l10 5 10-5" strokeLinejoin="round" />
+        <path d="M2 12l10 5 10-5" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  openrouter: {
+    label: "Cloud (OpenRouter)",
+    title: "Cloud: Uses OpenRouter API. Requires valid API key + credits. Access to 100+ models.",
+    color: "#818cf8",
+    gradient: "linear-gradient(135deg, #6366f1, #a855f7)",
+    panelBg: "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.04))",
+    panelBorder: "1px solid rgba(99,102,241,0.2)",
+    apiKeyField: "openrouter_api_key",
+    hint: <>Uses cloud models via <b style={{ color: "#a78bfa" }}>OpenRouter</b>.</>,
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  nvidia: {
+    label: "NVIDIA",
+    title: "NVIDIA: Uses NVIDIA's NIM-hosted API. Requires an NVIDIA API key set in Settings.",
+    color: "#76b900",
+    gradient: "linear-gradient(135deg, #76b900, #567800)",
+    panelBg: "linear-gradient(135deg, rgba(118,185,0,0.1), rgba(118,185,0,0.03))",
+    panelBorder: "1px solid rgba(118,185,0,0.25)",
+    apiKeyField: "nvidia_api_key",
+    hint: <>Uses <b style={{ color: "#a3e635" }}>NVIDIA</b> NIM-hosted models.</>,
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path d="M4 4l16 16M4 12h16M4 20L20 4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  mistral: {
+    label: "Mistral",
+    title: "Mistral: Uses the Mistral AI API. Requires a Mistral API key set in Settings.",
+    color: "#fa500a",
+    gradient: "linear-gradient(135deg, #fa500a, #c23e08)",
+    panelBg: "linear-gradient(135deg, rgba(250,80,10,0.1), rgba(250,80,10,0.03))",
+    panelBorder: "1px solid rgba(250,80,10,0.25)",
+    apiKeyField: "mistral_api_key",
+    hint: <>Uses <b style={{ color: "#fb923c" }}>Mistral</b> AI models.</>,
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path d="M4 4h16M4 12h16M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  gemini: {
+    label: "Gemini",
+    title: "Gemini: Uses Google's Gemini API. Requires a Gemini API key set in Settings.",
+    color: "#4285f4",
+    gradient: "linear-gradient(135deg, #4285f4, #9b72cb)",
+    panelBg: "linear-gradient(135deg, rgba(66,133,244,0.1), rgba(155,114,203,0.03))",
+    panelBorder: "1px solid rgba(66,133,244,0.25)",
+    apiKeyField: "gemini_api_key",
+    hint: <>Uses Google <b style={{ color: "#8ab4f8" }}>Gemini</b> models.</>,
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+};
+
+const PROVIDER_ORDER: ProviderMode[] = ["ollama", "openrouter", "nvidia", "mistral", "gemini"];
 
 // ─── Prompt Tester + Live Trace Terminal ──────────────────────────────────
 export function PromptSection({
@@ -65,9 +168,7 @@ export function PromptSection({
       notify(
         next === "ollama"
           ? "Switched to Local (Ollama) — runs models on your laptop, free, no API key needed"
-          : next === "nvidia"
-          ? "Switched to NVIDIA — uses NVIDIA NIM-hosted models"
-          : "Switched to Cloud (OpenRouter) — uses best-in-class cloud models"
+          : `Switched to ${PROVIDER_META[next].label} — set an API key in Settings if you haven't already`
       );
     } catch (e) {
       notify(e instanceof Error ? e.message : "Failed to switch provider");
@@ -191,18 +292,8 @@ export function PromptSection({
             marginBottom: 14,
             padding: "10px 14px",
             borderRadius: 14,
-            background:
-              currentProvider === "ollama"
-                ? "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(16,185,129,0.04))"
-                : currentProvider === "nvidia"
-                ? "linear-gradient(135deg, rgba(118,185,0,0.1), rgba(118,185,0,0.03))"
-                : "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.04))",
-            border:
-              currentProvider === "ollama"
-                ? "1px solid rgba(52,211,153,0.2)"
-                : currentProvider === "nvidia"
-                ? "1px solid rgba(118,185,0,0.25)"
-                : "1px solid rgba(99,102,241,0.2)",
+            background: PROVIDER_META[currentProvider].panelBg,
+            border: PROVIDER_META[currentProvider].panelBorder,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -225,112 +316,42 @@ export function PromptSection({
                 borderRadius: 999,
                 background: "rgba(0,0,0,0.35)",
                 border: "1px solid rgba(255,255,255,0.06)",
+                flexWrap: "wrap",
               }}
             >
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => switchProvider("ollama")}
-                disabled={providerSaving}
-                title="Local: Uses Ollama running on your laptop. Free, no API key. Requires: `ollama serve` + `ollama pull mistral`"
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontFamily: "inherit",
-                  fontWeight: 700,
-                  transition: "all 0.2s",
-                  background:
-                    currentProvider === "ollama"
-                      ? "linear-gradient(135deg, #10b981, #059669)"
-                      : "transparent",
-                  color: currentProvider === "ollama" ? "white" : "#71717a",
-                  boxShadow:
-                    currentProvider === "ollama"
-                      ? "0 2px 12px rgba(16,185,129,0.35)"
-                      : "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinejoin="round" />
-                  <path d="M2 17l10 5 10-5" strokeLinejoin="round" />
-                  <path d="M2 12l10 5 10-5" strokeLinejoin="round" />
-                </svg>
-                Local (Ollama)
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => switchProvider("openrouter")}
-                disabled={providerSaving}
-                title="Cloud: Uses OpenRouter API. Requires valid API key + credits. Access to 100+ models."
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontFamily: "inherit",
-                  fontWeight: 700,
-                  transition: "all 0.2s",
-                  background:
-                    currentProvider === "openrouter"
-                      ? "linear-gradient(135deg, #6366f1, #a855f7)"
-                      : "transparent",
-                  color: currentProvider === "openrouter" ? "white" : "#71717a",
-                  boxShadow:
-                    currentProvider === "openrouter"
-                      ? "0 2px 12px rgba(139,92,246,0.35)"
-                      : "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Cloud (OpenRouter)
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => switchProvider("nvidia")}
-                disabled={providerSaving}
-                title="NVIDIA: Uses NVIDIA's NIM-hosted API. Requires an NVIDIA API key set in Settings."
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontFamily: "inherit",
-                  fontWeight: 700,
-                  transition: "all 0.2s",
-                  background:
-                    currentProvider === "nvidia"
-                      ? "linear-gradient(135deg, #76b900, #567800)"
-                      : "transparent",
-                  color: currentProvider === "nvidia" ? "white" : "#71717a",
-                  boxShadow:
-                    currentProvider === "nvidia"
-                      ? "0 2px 12px rgba(118,185,0,0.35)"
-                      : "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M4 4l16 16M4 12h16M4 20L20 4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                NVIDIA
-              </motion.button>
+              {PROVIDER_ORDER.map((mode) => {
+                const meta = PROVIDER_META[mode];
+                const active = currentProvider === mode;
+                return (
+                  <motion.button
+                    key={mode}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => switchProvider(mode)}
+                    disabled={providerSaving}
+                    title={meta.title}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontFamily: "inherit",
+                      fontWeight: 700,
+                      transition: "all 0.2s",
+                      background: active ? meta.gradient : "transparent",
+                      color: active ? "white" : "#71717a",
+                      boxShadow: active ? `0 2px 12px ${meta.color}59` : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    {meta.icon}
+                    {meta.label}
+                  </motion.button>
+                );
+              })}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -339,31 +360,18 @@ export function PromptSection({
                 width: 7,
                 height: 7,
                 borderRadius: "50%",
-                background: currentProvider === "ollama" ? "#10b981" : currentProvider === "nvidia" ? "#76b900" : "#818cf8",
-                boxShadow: `0 0 8px ${currentProvider === "ollama" ? "#10b981" : currentProvider === "nvidia" ? "#76b900" : "#818cf8"}`,
+                background: PROVIDER_META[currentProvider].color,
+                boxShadow: `0 0 8px ${PROVIDER_META[currentProvider].color}`,
               }}
             />
             <span style={{ fontSize: 11, color: "#71717a", maxWidth: 240 }}>
-              {currentProvider === "ollama" ? (
-                <>
-                  Running on your laptop — <b style={{ color: "#34d399" }}>free</b>. Make sure{" "}
-                  <code style={{ fontSize: 10, color: "#a78bfa", background: "rgba(167,139,250,0.08)", padding: "1px 5px", borderRadius: 4 }}>ollama serve</code> is running.
-                </>
-              ) : currentProvider === "nvidia" ? (
-                <>
-                  Uses <b style={{ color: "#a3e635" }}>NVIDIA</b> NIM-hosted models.
-                  {!settings.nvidia_api_key && (
-                    <span style={{ color: "#fbbf24" }}> ⚠ No API key set</span>
-                  )}
-                </>
-              ) : (
-                <>
-                  Uses cloud models via <b style={{ color: "#a78bfa" }}>OpenRouter</b>.
-                  {!settings.openrouter_api_key && (
-                    <span style={{ color: "#fbbf24" }}> ⚠ No API key set</span>
-                  )}
-                </>
-              )}
+              {PROVIDER_META[currentProvider].hint}
+              {(() => {
+                const field = PROVIDER_META[currentProvider].apiKeyField;
+                return field && !settings[field] ? (
+                  <span style={{ color: "#fbbf24" }}> ⚠ No API key set</span>
+                ) : null;
+              })()}
             </span>
           </div>
         </div>

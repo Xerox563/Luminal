@@ -67,7 +67,7 @@ analyze -> retrieve -> [tool -> approval] -> route -> generate -> critic -> erro
   step, 95% → cheapest model) via `app/services/router.py` + `app/services/budget.py`
 - **generate** — checks the Redis response cache (`app/services/cache.py`, skipped on a critic-triggered
   regeneration so a bad response can't just replay itself) before calling the resolved provider adapter
-  (`app/services/providers/*.py`: openai, anthropic, deepseek, nvidia, ollama, openrouter — common interface in
+  (`app/services/providers/*.py`: openai, anthropic, deepseek, nvidia, mistral, gemini, ollama, openrouter — common interface in
   `providers/base.py`), wrapped in `app/services/retry.py::retry_with_backoff`. On a 402 from a cloud
   provider it does one hardcoded fallback to local Ollama.
 - **critic** — optionally scores response quality; regenerates (bounded by `max_regenerations`) with the

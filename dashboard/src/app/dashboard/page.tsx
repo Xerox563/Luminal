@@ -27,14 +27,18 @@ interface SettingsMap {
   anthropic_api_key: string;
   deepseek_api_key: string;
   nvidia_api_key: string;
+  mistral_api_key: string;
+  gemini_api_key: string;
   openrouter_base_url: string;
   openai_base_url: string;
   anthropic_base_url: string;
   deepseek_base_url: string;
   nvidia_base_url: string;
+  mistral_base_url: string;
+  gemini_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
-  default_provider: "openrouter" | "ollama" | "nvidia";
+  default_provider: "openrouter" | "ollama" | "nvidia" | "mistral" | "gemini";
 }
 import { CostTrendChart, BudgetPanel } from "@/components/charts";
 import { RagPanel, ModelPerfPanel } from "@/components/panels";
@@ -50,11 +54,15 @@ const EMPTY_SETTINGS: SettingsMap = {
   anthropic_api_key: "",
   deepseek_api_key: "",
   nvidia_api_key: "",
+  mistral_api_key: "",
+  gemini_api_key: "",
   openrouter_base_url: "",
   openai_base_url: "",
   anthropic_base_url: "",
   deepseek_base_url: "",
   nvidia_base_url: "",
+  mistral_base_url: "",
+  gemini_base_url: "",
   ollama_base_url: "",
   use_llm_complexity: "false",
   default_provider: "ollama",

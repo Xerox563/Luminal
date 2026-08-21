@@ -16,6 +16,8 @@ class ProviderName(str, enum.Enum):
     ANTHROPIC = "anthropic"
     DEEPSEEK = "deepseek"
     NVIDIA = "nvidia"
+    MISTRAL = "mistral"
+    GEMINI = "gemini"
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
 

@@ -37,11 +37,15 @@ class SettingsUpdate(BaseModel):
     anthropic_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     nvidia_api_key: Optional[str] = None
+    mistral_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
     openrouter_base_url: Optional[str] = None
     openai_base_url: Optional[str] = None
     anthropic_base_url: Optional[str] = None
     deepseek_base_url: Optional[str] = None
     nvidia_base_url: Optional[str] = None
+    mistral_base_url: Optional[str] = None
+    gemini_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
     use_llm_complexity: Optional[bool] = None
     default_provider: Optional[str] = None
