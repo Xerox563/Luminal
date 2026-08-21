@@ -1,18 +1,19 @@
 import uuid
 import hashlib
+import logging
 from typing import List
-from pypdf import PdfReader
-from docx import Document as DocxDocument
 from io import BytesIO
 from app.services.embedding import EmbeddingService
 from app.services.vector_store.base import DocumentChunk, VectorStoreRegistry
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
     if len(text) <= chunk_size:
         return [text]
-    
+
     chunks = []
     start = 0
     while start < len(text):
@@ -26,14 +27,18 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[st
 
 
 def extract_text_from_pdf(file_content: bytes) -> str:
+    from pypdf import PdfReader
     reader = PdfReader(BytesIO(file_content))
     text = ""
     for page in reader.pages:
-        text += page.extract_text() + "\n"
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
     return text
 
 
 def extract_text_from_docx(file_content: bytes) -> str:
+    from docx import Document as DocxDocument
     doc = DocxDocument(BytesIO(file_content))
     text = ""
     for paragraph in doc.paragraphs:
@@ -49,7 +54,7 @@ def extract_text(file_content: bytes, filename: str) -> str:
     ext = filename.lower().split(".")[-1]
     if ext == "pdf":
         return extract_text_from_pdf(file_content)
-    elif ext == "docx":
+    elif ext in ["docx"]:
         return extract_text_from_docx(file_content)
     elif ext in ["txt", "md"]:
         return extract_text_from_txt(file_content)
@@ -66,11 +71,18 @@ async def ingest_document(
     metadata: dict = None
 ) -> dict:
     text = extract_text(file_content, filename)
-    
+
+    if not text.strip():
+        raise ValueError("No text content could be extracted from the file")
+
     chunks_text = chunk_text(text, chunk_size, overlap)
-    
-    embeddings = EmbeddingService.embed_texts(chunks_text)
-    
+
+    try:
+        embeddings = EmbeddingService.embed_texts(chunks_text)
+    except Exception as e:
+        logger.error(f"Embedding generation failed: {e}")
+        raise RuntimeError(f"Failed to generate embeddings: {e}")
+
     doc_chunks = []
     for i, (chunk_text_content, embedding) in enumerate(zip(chunks_text, embeddings)):
         chunk_id = hashlib.sha256(f"{user_id}:{filename}:{i}".encode()).hexdigest()[:16]
@@ -79,6 +91,7 @@ async def ingest_document(
             "filename": filename,
             "chunk_index": i,
             "total_chunks": len(chunks_text),
+            "created_at": str(uuid.uuid4()),
             **(metadata or {})
         }
         chunk = DocumentChunk(
@@ -88,14 +101,21 @@ async def ingest_document(
             embedding=embedding
         )
         doc_chunks.append(chunk)
-    
+
     vector_store = VectorStoreRegistry.get(settings.vector_store)
     if not vector_store:
         vector_store = VectorStoreRegistry.get_default()
-    
-    if vector_store:
+
+    if not vector_store:
+        raise RuntimeError("No vector store available. Please configure Chroma or another vector store.")
+
+    try:
+        await vector_store.initialize()
         await vector_store.add_documents(doc_chunks)
-    
+    except Exception as e:
+        logger.error(f"Vector store add_documents failed: {e}")
+        raise RuntimeError(f"Failed to store documents: {e}")
+
     return {
         "document_id": hashlib.sha256(f"{user_id}:{filename}".encode()).hexdigest()[:16],
         "filename": filename,

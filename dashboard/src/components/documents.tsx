@@ -61,7 +61,10 @@ export function DocumentsSection({
         body: formData,
       });
 
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Upload failed (${res.status})`);
+      }
       await loadDocuments();
       setFile(null);
       setShowUpload(false);
