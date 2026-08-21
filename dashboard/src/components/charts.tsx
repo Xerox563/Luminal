@@ -12,7 +12,7 @@ export function CostTrendChart({ daily }: { daily: DailyPoint[] }) {
   const H = 240;
   const PAD = { l: 46, r: 14, t: 22, b: 30 };
   const points = [...(daily ?? [])].sort((a, b) => a.date.localeCompare(b.date));
-  const hasData = points.length > 1 && points.some((p) => p.cost > 0 || p.requests > 0);
+  const hasData = points.length > 0 && points.some((p) => p.cost > 0 || p.requests > 0);
 
   const maxCost = Math.max(...points.map((p) => p.cost), 0.0001);
   const maxReq = Math.max(...points.map((p) => p.requests), 1);
@@ -242,7 +242,7 @@ export function BudgetPanel({
             whileTap={{ scale: 0.95 }}
             onClick={() => {
               setEditing(!editing);
-              if (!editing) setVal(String(budget.monthly_budget || 50));
+              if (!editing) setVal(String(budget.monthly_budget ?? 50));
             }}
             style={{ ...ghostBtn, padding: "6px 12px", fontSize: 11.5 }}
           >
