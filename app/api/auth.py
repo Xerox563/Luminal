@@ -1,24 +1,92 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.models import User
-from app.schemas.user import UserCreate, UserResponse, Token, TokenData
+from app.models import ComplexityLevel, ModelConfig, User
+from app.schemas.auth import AuthLoginRequest, AuthRegisterRequest, AuthSessionResponse
+from app.schemas.user import UserCreate, UserResponse, Token
 from app.schemas.api_key import APIKeyCreate, APIKeyResponse, APIKeyUpdate
 from app.services.auth import (
-    verify_password, get_password_hash, create_access_token, 
-    decode_token, verify_api_key
+    create_access_token,
+    decode_token,
+    get_password_hash,
+    verify_password,
 )
 from app.services.api_key import (
-    create_api_key, get_api_keys, get_api_key_by_id, 
-    update_api_key, delete_api_key, validate_api_key
+    create_api_key,
+    delete_api_key,
+    get_api_key_by_id,
+    get_api_keys,
+    update_api_key,
+    validate_api_key,
 )
 from typing import Annotated
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+DEFAULT_MODEL_CONFIGS = [
+    {"complexity": "low", "model_name": "mistral:latest", "provider": "ollama", "is_default": True},
+    {"complexity": "medium", "model_name": "llama3.2:latest", "provider": "ollama"},
+    {"complexity": "high", "model_name": "codellama:latest", "provider": "ollama"},
+]
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+    result = await db.execute(select(User).where(User.email == normalize_email(email)))
+    return result.scalar_one_or_none()
+
+
+async def create_user_with_defaults(db: AsyncSession, user_data: UserCreate) -> User:
+    existing_user = await get_user_by_email(db, user_data.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    user = User(
+        email=normalize_email(user_data.email),
+        hashed_password=get_password_hash(user_data.password),
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    for config in DEFAULT_MODEL_CONFIGS:
+        db.add(
+            ModelConfig(
+                user_id=user.id,
+                complexity=ComplexityLevel(config["complexity"]),
+                model_name=config["model_name"],
+                provider=config["provider"],
+                is_default=config.get("is_default", False),
+            )
+        )
+    await db.commit()
+
+    return user
+
+
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
+    user = await get_user_by_email(db, email)
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return user
+
+
+def build_auth_session(user: User) -> AuthSessionResponse:
+    access_token = create_access_token(data={"sub": user.id})
+    return AuthSessionResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )
 
 
 async def get_current_user(
@@ -32,9 +100,10 @@ async def get_current_user(
     )
     try:
         payload = decode_token(token)
-        user_id: int = int(payload.get("sub")) if payload.get("sub") is not None else None
-        if user_id is None:
+        subject = payload.get("sub")
+        if subject is None:
             raise credentials_exception
+        user_id = int(subject)
     except Exception:
         raise credentials_exception
     
@@ -67,47 +136,32 @@ async def get_current_user_from_api_key(
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(User).where(User.email == user_data.email))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = get_password_hash(user_data.password)
-    user = User(email=user_data.email, hashed_password=hashed_password)
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    default_configs = [
-        {"complexity": "low", "model_name": "mistral:latest", "provider": "ollama", "is_default": True},
-        {"complexity": "medium", "model_name": "llama3.2:latest", "provider": "ollama"},
-        {"complexity": "high", "model_name": "codellama:latest", "provider": "ollama"},
-    ]
-    for config in default_configs:
-        from app.models import ModelConfig, ComplexityLevel
-        model_config = ModelConfig(
-            user_id=user.id,
-            complexity=ComplexityLevel(config["complexity"]),
-            model_name=config["model_name"],
-            provider=config["provider"],
-            is_default=config.get("is_default", False)
-        )
-        db.add(model_config)
-    await db.commit()
-    
+    user = await create_user_with_defaults(db, user_data)
     return user
 
 
 @router.post("/login", response_model=Token)
 async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(User).where(User.email == form_data.username))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    
-    access_token = create_access_token(data={"sub": user.id})
-    return {"access_token": access_token, "token_type": "bearer"}
+    user = await authenticate_user(db, form_data.username, form_data.password)
+    return build_auth_session(user)
+
+
+@router.post("/session/register", response_model=AuthSessionResponse, status_code=status.HTTP_201_CREATED)
+async def register_with_session(
+    user_data: AuthRegisterRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    user = await create_user_with_defaults(db, user_data)
+    return build_auth_session(user)
+
+
+@router.post("/session/login", response_model=AuthSessionResponse)
+async def login_with_session(
+    credentials: AuthLoginRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    user = await authenticate_user(db, credentials.email, credentials.password)
+    return build_auth_session(user)
 
 
 @router.get("/me", response_model=UserResponse)
