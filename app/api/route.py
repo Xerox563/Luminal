@@ -116,6 +116,10 @@ async def route_prompt(
         prompt=body.prompt
     )
     
+    # Normalize: AgentState is a dataclass, convert to dict
+    if hasattr(result, "to_dict"):
+        result = result.to_dict()
+    
     # Extract response from agent state
     response_content = result.get("response", "")
     model_used = result.get("selected_model", "unknown")
