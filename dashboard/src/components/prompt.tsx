@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { RouteResponse, TraceEntry } from "@/lib/types";
 import { API_URL, NODE_COLORS, fmtMoney, fmtNum, api, newSessionId } from "@/lib/api";
 import { panelStyle, SectionTitle, ghostBtn, badgeStyle, easeOutExpo } from "@/components/ui";
+import { Markdown } from "@/components/markdown";
 
 interface SettingsMap {
   openrouter_api_key: string;
@@ -570,15 +571,12 @@ export function PromptSection({
                   background: "#0c0c12",
                   borderRadius: 14,
                   padding: "16px 18px",
-                  whiteSpace: "pre-wrap",
-                  fontSize: 14,
-                  lineHeight: 1.75,
                   border: "1px solid rgba(255,255,255,0.07)",
                   borderLeft: "3px solid #a855f7",
-                  color: "#e4e4e7",
+                  overflowX: "auto",
                 }}
               >
-                {response.content}
+                <Markdown content={response.content} />
               </motion.div>
             </motion.div>
           )}

@@ -12,7 +12,6 @@ import { LandingRag } from "@/components/landing/rag";
 import { LandingStats } from "@/components/landing/stats";
 import { LandingDocs } from "@/components/landing/docs";
 import { LandingCta } from "@/components/landing/cta";
-import { LandingFooter } from "@/components/landing/footer";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -42,8 +41,6 @@ export default function LandingPage() {
         <LandingDocs />
         <LandingCta onCta={goToDashboard} />
      </main>
-
-      <LandingFooter onCta={goToDashboard} />
    </div>
   );
 }
