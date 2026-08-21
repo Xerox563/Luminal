@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from datetime import datetime, date
+from datetime import datetime
 from app.models import User
 
 
@@ -11,7 +11,9 @@ async def check_and_reset_budget(db: AsyncSession, user_id: int) -> None:
     if not user:
         return
     
-    today = date.today()
+    # user.updated_at is stored via datetime.utcnow(), so the month boundary
+    # must use UTC "today" too, not the server's local date.
+    today = datetime.utcnow()
     first_of_month = datetime(today.year, today.month, 1)
     
     # Check if user's spend was last updated before the 1st of this month
@@ -22,7 +24,9 @@ async def check_and_reset_budget(db: AsyncSession, user_id: int) -> None:
 
 
 async def reset_monthly_budget(db: AsyncSession) -> int:
-    today = date.today()
+    # user.updated_at is stored via datetime.utcnow(), so the month boundary
+    # must use UTC "today" too, not the server's local date.
+    today = datetime.utcnow()
     first_of_month = datetime(today.year, today.month, 1)
     
     result = await db.execute(

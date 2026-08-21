@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from app.db.session import get_db
@@ -286,9 +286,12 @@ async def get_dashboard_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    today = date.today()
-    start_of_day = datetime.combine(today, datetime.min.time())
-    start_of_month = datetime(today.year, today.month, 1)
+    # created_at is stored via datetime.utcnow(), so bucket boundaries must
+    # use UTC "today" too — using the server's local date here would exclude
+    # rows whose UTC date lags the local one (or double-count the reverse).
+    now = datetime.utcnow()
+    start_of_day = datetime(now.year, now.month, now.day)
+    start_of_month = datetime(now.year, now.month, 1)
     
     today_result = await db.execute(
         select(
