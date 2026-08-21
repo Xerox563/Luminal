@@ -25,6 +25,8 @@ import { RagPanel, ModelPerfPanel } from "@/components/panels";
 import { PromptSection } from "@/components/prompt";
 import { ApiKeysSection, LogsSection } from "@/components/logs";
 import { SettingsSection } from "@/components/settings";
+import { DocumentsSection } from "@/components/documents";
+import { McpToolsSection } from "@/components/mcp_tools";
 
 const EMPTY_SETTINGS = {
   openrouter_api_key: "",
@@ -304,6 +306,12 @@ export default function Dashboard() {
 
         {/* Prompt tester + live terminal */}
         {!loading && <PromptSection token={token} onComplete={() => loadAll(true)} />}
+
+        {/* Documents for RAG */}
+        {!loading && <DocumentsSection token={token} notify={notify} />}
+
+        {/* MCP Tools registration */}
+        {!loading && <McpToolsSection token={token} notify={notify} />}
 
         {/* Provider settings */}
         <SettingsSection token={token} settings={settings} setSettings={setSettings} notify={notify} />
