@@ -6,8 +6,36 @@ import type { RouteResponse, TraceEntry } from "@/lib/types";
 import { API_URL, NODE_COLORS, fmtMoney, fmtNum, api } from "@/lib/api";
 import { panelStyle, SectionTitle, ghostBtn, badgeStyle, easeOutExpo } from "@/components/ui";
 
+interface SettingsMap {
+  openrouter_api_key: string;
+  openai_api_key: string;
+  anthropic_api_key: string;
+  deepseek_api_key: string;
+  openrouter_base_url: string;
+  openai_base_url: string;
+  anthropic_base_url: string;
+  deepseek_base_url: string;
+  ollama_base_url: string;
+  use_llm_complexity: string;
+  default_provider: "openrouter" | "ollama";
+}
+
+type ProviderMode = "openrouter" | "ollama";
+
 // ─── Prompt Tester + Live Trace Terminal ──────────────────────────────────
-export function PromptSection({ token, onComplete }: { token: string; onComplete: () => void }) {
+export function PromptSection({
+  token,
+  onComplete,
+  settings,
+  setSettings,
+  notify,
+}: {
+  token: string;
+  onComplete: () => void;
+  settings: SettingsMap;
+  setSettings: (s: SettingsMap) => void;
+  notify: (msg: string) => void;
+}) {
   const [prompt, setPrompt] = useState("");
   const [sending, setSending] = useState(false);
   const [response, setResponse] = useState<RouteResponse | null>(null);
@@ -15,9 +43,34 @@ export function PromptSection({ token, onComplete }: { token: string; onComplete
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(true);
+  const [providerSaving, setProviderSaving] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const autoScroll = useRef(true);
+
+  const currentProvider: ProviderMode =
+    (settings.default_provider as ProviderMode) || "ollama";
+
+  const switchProvider = async (next: ProviderMode) => {
+    if (next === currentProvider || providerSaving) return;
+    setProviderSaving(true);
+    try {
+      const updated = await api<SettingsMap>("/dashboard/settings", token, {
+        method: "PUT",
+        body: JSON.stringify({ default_provider: next }),
+      });
+      setSettings({ ...settings, ...updated, default_provider: next });
+      notify(
+        next === "ollama"
+          ? "Switched to Local (Ollama) — runs models on your laptop, free, no API key needed"
+          : "Switched to Cloud (OpenRouter) — uses best-in-class cloud models"
+      );
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Failed to switch provider");
+    } finally {
+      setProviderSaving(false);
+    }
+  };
 
   useEffect(() => {
     const el = terminalRef.current;
@@ -116,6 +169,150 @@ export function PromptSection({ token, onComplete }: { token: string; onComplete
             </motion.span>
           }
         />
+
+        {/* Provider Mode Toggle */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            marginBottom: 14,
+            padding: "10px 14px",
+            borderRadius: 14,
+            background:
+              currentProvider === "ollama"
+                ? "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(16,185,129,0.04))"
+                : "linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.04))",
+            border:
+              currentProvider === "ollama"
+                ? "1px solid rgba(52,211,153,0.2)"
+                : "1px solid rgba(99,102,241,0.2)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.03em",
+                color: "#a1a1aa",
+                textTransform: "uppercase",
+              }}
+            >
+              Model Source
+            </span>
+            <div
+              style={{
+                display: "flex",
+                gap: 2,
+                padding: 3,
+                borderRadius: 999,
+                background: "rgba(0,0,0,0.35)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+            >
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => switchProvider("ollama")}
+                disabled={providerSaving}
+                title="Local: Uses Ollama running on your laptop. Free, no API key. Requires: `ollama serve` + `ollama pull mistral`"
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  fontWeight: 700,
+                  transition: "all 0.2s",
+                  background:
+                    currentProvider === "ollama"
+                      ? "linear-gradient(135deg, #10b981, #059669)"
+                      : "transparent",
+                  color: currentProvider === "ollama" ? "white" : "#71717a",
+                  boxShadow:
+                    currentProvider === "ollama"
+                      ? "0 2px 12px rgba(16,185,129,0.35)"
+                      : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinejoin="round" />
+                  <path d="M2 17l10 5 10-5" strokeLinejoin="round" />
+                  <path d="M2 12l10 5 10-5" strokeLinejoin="round" />
+                </svg>
+                Local (Ollama)
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => switchProvider("openrouter")}
+                disabled={providerSaving}
+                title="Cloud: Uses OpenRouter API. Requires valid API key + credits. Access to 100+ models."
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  fontWeight: 700,
+                  transition: "all 0.2s",
+                  background:
+                    currentProvider === "openrouter"
+                      ? "linear-gradient(135deg, #6366f1, #a855f7)"
+                      : "transparent",
+                  color: currentProvider === "openrouter" ? "white" : "#71717a",
+                  boxShadow:
+                    currentProvider === "openrouter"
+                      ? "0 2px 12px rgba(139,92,246,0.35)"
+                      : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Cloud (OpenRouter)
+              </motion.button>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: currentProvider === "ollama" ? "#10b981" : "#818cf8",
+                boxShadow: `0 0 8px ${currentProvider === "ollama" ? "#10b981" : "#818cf8"}`,
+              }}
+            />
+            <span style={{ fontSize: 11, color: "#71717a", maxWidth: 240 }}>
+              {currentProvider === "ollama" ? (
+                <>
+                  Running on your laptop — <b style={{ color: "#34d399" }}>free</b>. Make sure{" "}
+                  <code style={{ fontSize: 10, color: "#a78bfa", background: "rgba(167,139,250,0.08)", padding: "1px 5px", borderRadius: 4 }}>ollama serve</code> is running.
+                </>
+              ) : (
+                <>
+                  Uses cloud models via <b style={{ color: "#a78bfa" }}>OpenRouter</b>.
+                  {!settings.openrouter_api_key && (
+                    <span style={{ color: "#fbbf24" }}> ⚠ No API key set</span>
+                  )}
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+
         <form onSubmit={send}>
           <div style={{ position: "relative" }}>
             <textarea
@@ -245,6 +442,8 @@ export function PromptSection({ token, onComplete }: { token: string; onComplete
                   border: "1px solid rgba(248,113,113,0.25)",
                   fontSize: 13,
                   color: "#fca5a5",
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.65,
                 }}
               >
                 ✕ {error}

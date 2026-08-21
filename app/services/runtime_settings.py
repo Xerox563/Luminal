@@ -27,7 +27,7 @@ BOOL_SETTINGS = [
     "use_llm_complexity",
 ]
 
-ALL_SETTING_KEYS = PROVIDER_KEYS + BASE_URLS + BOOL_SETTINGS
+ALL_SETTING_KEYS = PROVIDER_KEYS + BASE_URLS + BOOL_SETTINGS + ["default_provider"]
 
 
 async def load_settings(db: AsyncSession) -> None:

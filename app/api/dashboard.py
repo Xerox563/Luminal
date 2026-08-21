@@ -42,6 +42,7 @@ class SettingsUpdate(BaseModel):
     deepseek_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
     use_llm_complexity: Optional[bool] = None
+    default_provider: Optional[str] = None
 
 
 @router.get("/budget")
@@ -69,6 +70,8 @@ async def update_settings(
     for key, value in updates.items():
         if key == "use_llm_complexity":
             await runtime_settings.set_setting(db, key, "true" if value else "false")
+        elif key == "default_provider":
+            await runtime_settings.set_setting(db, key, value or "")
         elif value != "":
             await runtime_settings.set_setting(db, key, value)
     return runtime_settings.settings_summary()
@@ -399,7 +402,7 @@ async def get_cost_breakdown(
     return {
         "daily": [
             {
-                "date": d.date.isoformat(),
+                "date": str(d.date) if d.date else "",
                 "requests": d.requests,
                 "cost": float(d.cost),
                 "tokens": d.tokens

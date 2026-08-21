@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { panelStyle, SectionTitle, ghostBtn, badgeStyle, easeOutExpo } from "@/components/ui";
@@ -16,6 +16,7 @@ interface SettingsMap {
   deepseek_base_url: string;
   ollama_base_url: string;
   use_llm_complexity: string;
+  default_provider: "openrouter" | "ollama";
 }
 
 const PROVIDER_KEYS: Array<keyof SettingsMap> = [
@@ -43,7 +44,7 @@ export function SettingsSection({
 }: {
   token: string;
   settings: SettingsMap;
-  setSettings: (s: SettingsMap) => void;
+  setSettings: React.Dispatch<React.SetStateAction<SettingsMap>>;
   notify: (msg: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
@@ -69,19 +70,23 @@ export function SettingsSection({
         if (entered) body[f.key] = entered;
       }
       if (llmDirty) body.use_llm_complexity = useLLM;
+      if (values.default_provider) body.default_provider = values.default_provider;
       const updated = await api<SettingsMap>("/dashboard/settings", token, {
         method: "PUT",
         body: JSON.stringify(body),
       });
       setSettings((prev) => {
-        const merged = { ...prev };
-        for (const k of Object.keys(updated) as Array<keyof SettingsMap>) {
-          const isProviderKey = PROVIDER_KEYS.includes(k);
+        const merged: SettingsMap = { ...prev };
+        const mergedDict = merged as unknown as Record<string, string>;
+        const updatedDict = updated as unknown as Record<string, string>;
+        for (const k of Object.keys(updatedDict)) {
+          const key = k as keyof SettingsMap;
+          const isProviderKey = PROVIDER_KEYS.includes(key);
           const userEntered = (values[k] ?? "").trim();
           if (isProviderKey && userEntered) {
-            merged[k] = maskValue(userEntered);
-          } else if (!isProviderKey || !prev[k]) {
-            merged[k] = updated[k];
+            mergedDict[k] = maskValue(userEntered);
+          } else if (!isProviderKey || !prev[key]) {
+            mergedDict[k] = updatedDict[k];
           }
         }
         if (llmDirty) merged.use_llm_complexity = updated.use_llm_complexity;
@@ -262,6 +267,72 @@ export function SettingsSection({
               </span>
             </span>
           </button>
+
+          {/* Provider mode toggle */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginTop: 12,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12.5,
+                color: "#cbd5e1",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              Default Provider:
+            </span>
+            <div
+              style={{
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+              }}
+            >
+              <button
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: settings.default_provider === "openrouter"
+                    ? "rgba(99, 102, 241, 0.2)"
+                    : "rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  color: settings.default_provider === "openrouter" ? "#6366f1" : "#a1a1aa",
+                  transition: "all 0.2s",
+                }}
+                onClick={() => setVal("default_provider", "openrouter")}
+                title="OpenRouter (cloud models, requires API key + credits)"
+              >
+                OpenRouter
+              </button>
+              <button
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: settings.default_provider === "ollama"
+                    ? "rgba(99, 102, 241, 0.2)"
+                    : "rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "inherit",
+                  color: settings.default_provider === "ollama" ? "#6366f1" : "#a1a1aa",
+                  transition: "all 0.2s",
+                }}
+                onClick={() => setVal("default_provider", "ollama")}
+                title="Ollama (local models, free, no API key needed)"
+              >
+                Ollama
+              </button>
+            </div>
+          </div>
 
           <AnimatePresence>
             {dirty && (

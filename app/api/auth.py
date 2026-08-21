@@ -78,9 +78,9 @@ async def register(user_data: UserCreate, db: Annotated[AsyncSession, Depends(ge
     await db.refresh(user)
     
     default_configs = [
-        {"complexity": "low", "model_name": "anthropic/claude-3-haiku", "provider": "openrouter", "is_default": True},
-        {"complexity": "medium", "model_name": "openai/gpt-4o-mini", "provider": "openrouter"},
-        {"complexity": "high", "model_name": "openai/gpt-4o", "provider": "openrouter"},
+        {"complexity": "low", "model_name": "mistral:latest", "provider": "ollama", "is_default": True},
+        {"complexity": "medium", "model_name": "llama3.2:latest", "provider": "ollama"},
+        {"complexity": "high", "model_name": "codellama:latest", "provider": "ollama"},
     ]
     for config in default_configs:
         from app.models import ModelConfig, ComplexityLevel

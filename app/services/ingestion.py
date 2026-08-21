@@ -83,11 +83,14 @@ async def ingest_document(
         logger.error(f"Embedding generation failed: {e}")
         raise RuntimeError(f"Failed to generate embeddings: {e}")
 
+    document_id = hashlib.sha256(f"{user_id}:{filename}".encode()).hexdigest()[:16]
+
     doc_chunks = []
     for i, (chunk_text_content, embedding) in enumerate(zip(chunks_text, embeddings)):
         chunk_id = hashlib.sha256(f"{user_id}:{filename}:{i}".encode()).hexdigest()[:16]
         chunk_metadata = {
             "user_id": user_id,
+            "document_id": document_id,
             "filename": filename,
             "chunk_index": i,
             "total_chunks": len(chunks_text),
@@ -117,7 +120,7 @@ async def ingest_document(
         raise RuntimeError(f"Failed to store documents: {e}")
 
     return {
-        "document_id": hashlib.sha256(f"{user_id}:{filename}".encode()).hexdigest()[:16],
+        "document_id": document_id,
         "filename": filename,
         "chunks_created": len(doc_chunks),
         "total_characters": len(text)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from app.models import ModelConfig, ComplexityLevel, User
@@ -100,5 +101,3 @@ async def get_default_model(db: AsyncSession, user_id: int) -> Optional[ModelCon
     )
     return result.scalar_one_or_none()
 
-
-from datetime import datetime

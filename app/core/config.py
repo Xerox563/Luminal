@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     deepseek_api_key: Optional[str] = None
     deepseek_base_url: Optional[str] = None
     ollama_base_url: Optional[str] = None
+    default_provider: str = "ollama"
     use_llm_complexity: bool = False
     chroma_host: Optional[str] = None
     chroma_port: Optional[int] = None

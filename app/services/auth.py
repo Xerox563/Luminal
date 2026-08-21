@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Annotated
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 import hashlib
 import os
 from cryptography.fernet import Fernet
@@ -17,16 +17,26 @@ from app.db.session import get_db
 from app.core.config import settings
 from app.models import User
 
-# Use SHA256 for simplicity (bcrypt has version issues)
+# Use the bcrypt library directly rather than passlib's CryptContext:
+# passlib 1.7.4's bcrypt backend version-sniffing crashes against
+# bcrypt>=4.1 (the `__about__` attribute it probes for was removed).
+BCRYPT_MAX_BYTES = 72
+
+
 def get_password_hash(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    truncated = password.encode("utf-8")[:BCRYPT_MAX_BYTES]
+    return bcrypt.hashpw(truncated, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            truncated = plain_password.encode("utf-8")[:BCRYPT_MAX_BYTES]
+            return bcrypt.checkpw(truncated, hashed_password.encode("utf-8"))
+        except Exception:
+            return False
+    # Legacy SHA256 hashes from before the bcrypt migration
     return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def get_encryption_key() -> bytes:

@@ -2,13 +2,18 @@ import asyncio
 from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from app.services.agent.state import AgentState
+
+allowed_msgpack_modules = [
+    ("app.services.agent.state", "Message"),
+    ("app.models", "ComplexityLevel"),
+]
+from app.services.agent.state import AgentState, Message
 from app.services.agent.nodes import (
     analyze_node, retrieve_node, tool_node, route_node,
     generate_node, critic_node, approval_node, error_recovery_node,
     should_continue_to_tool, should_continue_to_critic,
     should_continue_after_critic, should_handle_error,
-    should_request_approval
+    should_continue_to_approval, should_continue_after_approval
 )
 from app.core.config import settings
 
@@ -28,16 +33,21 @@ workflow.set_entry_point("analyze")
 
 workflow.add_edge("analyze", "retrieve")
 workflow.add_conditional_edges("retrieve", should_continue_to_tool, {"tool": "tool", "route": "route"})
-workflow.add_edge("tool", "route")
+
+# A tool marked requires_approval pauses the run here (approval_required=True)
+# instead of continuing to route/generate; POST /route/approve + resume_agent()
+# grants/denies and resumes from this point.
+workflow.add_conditional_edges("tool", should_continue_to_approval, {"approval": "approval", "route": "route"})
+workflow.add_conditional_edges("approval", should_continue_after_approval, {"route": "route", "end": END})
+
 workflow.add_edge("route", "generate")
 
 workflow.add_conditional_edges("generate", should_handle_error, {"error_recovery": "error_recovery", "end": "critic"})
 workflow.add_edge("error_recovery", "generate")
 
-workflow.add_conditional_edges("critic", should_continue_after_critic, {"generate": "generate", "end": "approval"})
-workflow.add_conditional_edges("approval", should_request_approval, {"approval": "approval", "generate": "generate", "end": END})
+workflow.add_conditional_edges("critic", should_continue_after_critic, {"generate": "generate", "end": END})
 
-memory = MemorySaver()
+memory = MemorySaver().with_allowlist(allowed_msgpack_modules)
 app = workflow.compile(checkpointer=memory)
 
 AGENT_TIMEOUT = 60
@@ -50,16 +60,32 @@ async def run_agent(
     config: Optional[Dict] = None
 ) -> Dict[str, Any]:
     from datetime import datetime
+
+    # If this session_id was used before, carry its conversation history
+    # forward so the new turn continues the same conversation.
+    prior_messages = []
+    prior_state = await get_agent_state(session_id)
+    if prior_state and prior_state.get("messages"):
+        for m in prior_state["messages"]:
+            if isinstance(m, Message):
+                prior_messages.append(m)
+            elif isinstance(m, dict):
+                try:
+                    prior_messages.append(Message(**m))
+                except Exception:
+                    pass
+
     initial_state = AgentState(
         session_id=session_id,
         user_id=user_id,
-        current_prompt=prompt
+        current_prompt=prompt,
+        messages=prior_messages
     )
-    
+
     thread_config = {"configurable": {"thread_id": session_id}}
     if config:
         thread_config.update(config)
-    
+
     completed_at = datetime.utcnow()
     
     def to_dict(o: Any) -> Dict[str, Any]:
@@ -152,14 +178,34 @@ async def resume_agent(session_id: str, approval_granted: bool) -> Optional[Dict
     if not state or not state.values:
         return None
     vals = state.values
-    if isinstance(vals, dict):
-        vals["approval_granted"] = approval_granted
+    is_dict = isinstance(vals, dict)
+    completed_at = datetime.utcnow()
+
+    if not approval_granted:
+        # Denied: don't re-run the pipeline (it would just hit the same
+        # pending tool again) — just record the denial and stop here.
+        if is_dict:
+            vals["approval_granted"] = False
+            vals["approval_required"] = False
+            vals["error"] = "User denied approval"
+            vals["completed_at"] = completed_at
+        else:
+            vals.approval_granted = False
+            vals.approval_required = False
+            vals.error = "User denied approval"
+            vals.completed_at = completed_at
+        await app.aupdate_state(thread_config, vals if is_dict else vals.to_dict())
+        result = vals if is_dict else vals.to_dict()
+        result["completed_at"] = completed_at.isoformat()
+        return result
+
+    if is_dict:
+        vals["approval_granted"] = True
         vals["approval_required"] = False
     else:
-        vals.approval_granted = approval_granted
+        vals.approval_granted = True
         vals.approval_required = False
     result = await app.ainvoke(vals, config=thread_config)
-    completed_at = datetime.utcnow()
     if isinstance(result, dict):
         result["completed_at"] = completed_at.isoformat()
         return result

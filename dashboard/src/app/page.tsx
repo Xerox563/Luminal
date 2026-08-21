@@ -20,6 +20,20 @@ import {
   ghostBtn,
   easeOutExpo,
 } from "@/components/ui";
+
+interface SettingsMap {
+  openrouter_api_key: string;
+  openai_api_key: string;
+  anthropic_api_key: string;
+  deepseek_api_key: string;
+  openrouter_base_url: string;
+  openai_base_url: string;
+  anthropic_base_url: string;
+  deepseek_base_url: string;
+  ollama_base_url: string;
+  use_llm_complexity: string;
+  default_provider: "openrouter" | "ollama";
+}
 import { CostTrendChart, BudgetPanel } from "@/components/charts";
 import { RagPanel, ModelPerfPanel } from "@/components/panels";
 import { PromptSection } from "@/components/prompt";
@@ -28,7 +42,7 @@ import { SettingsSection } from "@/components/settings";
 import { DocumentsSection } from "@/components/documents";
 import { McpToolsSection } from "@/components/mcp_tools";
 
-const EMPTY_SETTINGS = {
+const EMPTY_SETTINGS: SettingsMap = {
   openrouter_api_key: "",
   openai_api_key: "",
   anthropic_api_key: "",
@@ -39,6 +53,7 @@ const EMPTY_SETTINGS = {
   deepseek_base_url: "",
   ollama_base_url: "",
   use_llm_complexity: "false",
+  default_provider: "ollama",
 };
 
 const STAT_ICONS = {
@@ -222,6 +237,146 @@ export default function Dashboard() {
 
       <Header connected={connected} budget={budget} onRefresh={() => loadAll(true)} onLogout={handleLogout} />
 
+      {!connected && token && !loading && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            maxWidth: 1440,
+            margin: "0 auto",
+            padding: "18px 32px 0",
+          }}
+        >
+          <div
+            style={{
+              padding: "20px 24px",
+              borderRadius: 18,
+              background:
+                "linear-gradient(135deg, rgba(239,68,68,0.14), rgba(251,146,60,0.08))",
+              border: "1px solid rgba(239,68,68,0.35)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 16,
+              flexWrap: "wrap",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: "rgba(239,68,68,0.18)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#fecaca", marginBottom: 6 }}>
+                Backend API is OFFLINE — can't reach <code style={{ fontSize: 13, color: "#fda4af", background: "rgba(248,113,113,0.12)", padding: "2px 6px", borderRadius: 6 }}>{API_URL}</code>
+              </div>
+              <div style={{ fontSize: 13, color: "#fca5a5", lineHeight: 1.7, marginBottom: 14 }}>
+                Cost, tokens, stats and prompt routing are missing because the FastAPI backend is not running or not reachable on port 8000. Run the commands below <b>inside the Luminal root folder</b> in new terminals to start everything:
+              </div>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: 12,
+                    background: "rgba(0,0,0,0.38)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "#fbbf24", marginBottom: 8, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    ① Terminal 1 — Backend (port 8000)
+                  </div>
+                  <div style={{ fontSize: 12, color: "#a5f3fc", whiteSpace: "pre-wrap" }}>{`cd /home/amit/Downloads/Old/Stuff/Grind/Luminal
+python3 -m venv venv 2>/dev/null || true
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000`}</div>
+                </div>
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: 12,
+                    background: "rgba(0,0,0,0.38)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 8, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    ② Terminal 2 — Ollama (local models, optional)
+                  </div>
+                  <div style={{ fontSize: 12, color: "#c4b5fd", whiteSpace: "pre-wrap" }}>{`# Install from https://ollama.com/download if needed
+ollama serve   # keep this running
+
+# (different tab) pull default model once:
+ollama pull mistral`}</div>
+                </div>
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: 12,
+                    background: "rgba(0,0,0,0.38)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "#34d399", marginBottom: 8, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    ③ Terminal 3 — Dashboard (port 3000)
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6ee7b7", whiteSpace: "pre-wrap" }}>{`cd /home/amit/Downloads/Old/Stuff/Grind/Luminal/dashboard
+npm install   # only first time
+npm run dev   # keep running on http://localhost:3000`}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  onClick={() => loadAll(true)}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(52,211,153,0.35)",
+                    background: "linear-gradient(135deg, rgba(16,185,129,0.18), rgba(5,150,105,0.12))",
+                    color: "#6ee7b7",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 12.5,
+                  }}
+                >
+                  ↻ Re-check connection
+                </button>
+                <button
+                  onClick={() => fetch(`${API_URL}/health`).then((r) => notify(r.ok ? `✅ Backend is up — try refreshing now` : `❌ Still unreachable (${r.status})`)).catch(() => notify("❌ Still unreachable — no response from port 8000"))}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.03)",
+                    color: "#a1a1aa",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 12.5,
+                  }}
+                >
+                  🩺 Ping /health endpoint
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       <main style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 32px 80px" }}>
         {/* Stat cards */}
         <AnimatePresence mode="wait">
@@ -305,7 +460,15 @@ export default function Dashboard() {
         )}
 
         {/* Prompt tester + live terminal */}
-        {!loading && <PromptSection token={token} onComplete={() => loadAll(true)} />}
+        {!loading && (
+          <PromptSection
+            token={token}
+            onComplete={() => loadAll(true)}
+            settings={settings}
+            setSettings={setSettings}
+            notify={notify}
+          />
+        )}
 
         {/* Documents for RAG */}
         {!loading && <DocumentsSection token={token} notify={notify} />}

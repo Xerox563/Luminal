@@ -80,25 +80,34 @@ Authentication is the JWT Bearer token (api_key is optional now).
 Backend /route handler:
   1. Resolve user from JWT (fallback to api_key for API clients).
   2. Check monthly budget — 402 if over budget.
-  3. Generate a session_id (user_<id>_<hex>).
+  3. Reuse the session_id from the request body if the caller sent one (continues
+     that conversation's history); otherwise generate a new one (user_<id>_<hex>).
   4. Run the LangGraph agent pipeline (see below).
-  5. Write an ExecutionLog row + add cost to user's current_spend.
-  6. Return { content, model, complexity, tokens_used, cost, latency_ms, session_id }.
+  5. If the run is still paused on tool approval, return 202 with the pending
+     approval info instead of logging/billing anything.
+  6. Otherwise write an ExecutionLog row + add cost to user's current_spend.
+  7. Return { content, model, complexity, tokens_used, cost, latency_ms, session_id, citations }.
 
 AGENT PIPELINE (LangGraph StateGraph) — nodes in order:
-  1. analyze   -> heuristic complexity score (low/medium/high)
+  1. analyze   -> hybrid complexity score (low/medium/high; heuristic or
+                  LLM-as-judge) computed once and reused by route, so the two
+                  never disagree within a request
   2. retrieve  -> RAG: only if the prompt matches RAG keywords; embeds query,
                   searches vector store, injects context + citations
-  3. tool      -> keyword/LLM decision; if tools matched, runs MCP tools
-                  (weather, database, etc.) and appends results as system context
+  3. tool      -> keyword/LLM decision; if a tool matches, runs it via MCP —
+                  unless it's marked requires_approval, in which case the run
+                  pauses here (approval_required=True) instead of calling it
+  3b. approval -> only entered when tool paused; the run ends here (still
+                  paused) until POST /route/approve grants or denies it
   4. route     -> picks the model config matching the complexity (budget-aware:
                   80% -> downgrade one step, 95% -> cheapest model)
-  5. generate  -> calls the provider (OpenRouter/OpenAI/Anthropic/DeepSeek/Ollama)
-                  with the augmented messages; captures content + token usage
+  5. generate  -> checks the Redis response cache, then calls the provider
+                  (OpenRouter/OpenAI/Anthropic/DeepSeek/Ollama) with retry +
+                  backoff; on a 402 from a cloud provider, falls back once to
+                  local Ollama
   6. critic    -> optionally scores the response; if low quality, regenerates
-                  up to N times with a stronger model
-  7. approval  -> pauses for human approval if a high-risk tool action is detected
-  8. error_recovery -> retries with lower temperature / disables RAG on failures
+                  (bounded) with the same model — skipped for local/Ollama
+  7. error_recovery -> retries with lower temperature / disables RAG on failures
 
 LIVE TRACE (the terminal panel)
 -------------------------------
@@ -126,7 +135,10 @@ Other endpoints:
   POST /auth/register | /auth/login | /auth/me
   POST /api-keys (CRUD)
   GET  /dashboard/*  (stats, logs, budget, cost-breakdown, model-performance, rag-stats)
-  POST /route/stream (SSE token streaming variant)
+  POST /route/stream (SSE token streaming variant — same routing/RAG/tool-calling
+                       helpers as the agent graph, but skips the critic loop and
+                       approval-gated tools since both need a full response first)
+  POST /route/approve { session_id, approved } (grant/deny a tool paused on approval)
   POST /documents (upload files for RAG ingestion)
   GET  /retrieval/search
   MCP tool endpoints under /mcp
@@ -146,14 +158,15 @@ These rows live in the model_configs table and are editable per user.
 KEY FILES
 ---------
   app/main.py                       FastAPI app + CORS + startup
-  app/api/route.py                  /route, /route/stream, /route/trace
+  app/api/route.py                  /route, /route/stream, /route/approve, /route/trace
   app/api/dashboard.py              analytics endpoints
   app/api/auth.py                   login, register, api-keys CRUD
-  app/services/agent/graph.py       LangGraph pipeline definition
+  app/services/agent/graph.py       LangGraph pipeline definition + run/resume_agent
   app/services/agent/nodes.py       pipeline node logic
   app/services/agent/state.py       AgentState + trace buffer
-  app/services/router.py            budget-aware model selection
-  app/services/openrouter.py        legacy OpenRouter client
+  app/services/router.py            budget-aware model selection + hybrid complexity
+  app/services/cache.py             Redis LLM response cache (used by generate_node)
+  app/services/retry.py             retry-with-backoff (used by generate_node)
   app/services/providers/           provider adapters (incl. openrouter)
   app/services/rag.py               retrieval + citations
   app/services/tool_calling.py      MCP tool decisions

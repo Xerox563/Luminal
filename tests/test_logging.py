@@ -2,17 +2,19 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime
 from app.models import ExecutionLog, ComplexityLevel
-from app.services.openrouter import calculate_cost
+from app.services.providers.openrouter import OpenRouterProvider
+
+_provider = OpenRouterProvider()
 
 
 def test_calculate_cost_known_model():
-    cost = calculate_cost("openai/gpt-4o-mini", 1000, 500)
+    cost = _provider.calculate_cost("openai/gpt-4o-mini", 1000, 500)
     expected = (1000 / 1_000_000) * 0.15 + (500 / 1_000_000) * 0.6
     assert abs(cost - expected) < 0.00001
 
 
 def test_calculate_cost_unknown_model():
-    cost = calculate_cost("unknown-model", 1000, 500)
+    cost = _provider.calculate_cost("unknown-model", 1000, 500)
     expected = (1000 / 1_000_000) * 1.0 + (500 / 1_000_000) * 2.0
     assert abs(cost - expected) < 0.00001
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import { fmtMoney } from "@/lib/api";
+import { API_URL, fmtMoney } from "@/lib/api";
 
 export const ghostBtn: React.CSSProperties = {
   padding: "8px 14px",
@@ -294,13 +294,15 @@ export function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   const [password, setPassword] = useState("admin");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [backendDown, setBackendDown] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setBackendDown(false);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/login`, {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ username: email, password }),
@@ -312,7 +314,8 @@ export function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
       const data = await res.json();
       onLogin(data.access_token);
     } catch {
-      setError("Cannot reach API server on port 8000");
+      setBackendDown(true);
+      setError("Cannot reach backend API server");
     } finally {
       setLoading(false);
     }
@@ -326,12 +329,103 @@ export function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
         alignItems: "center",
         justifyContent: "center",
         position: "relative",
-        overflow: "hidden",
+        overflow: "auto",
+        padding: "32px 20px",
+        flexDirection: "column",
+        gap: 20,
       }}
     >
       <div className="bg-glow top" />
       <div className="bg-glow right" />
       <div className="bg-grid" />
+
+      {backendDown && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          style={{
+            width: 900,
+            maxWidth: "calc(100vw - 40px)",
+            padding: "18px 22px",
+            borderRadius: 18,
+            background:
+              "linear-gradient(135deg, rgba(239,68,68,0.14), rgba(251,146,60,0.08))",
+            border: "1px solid rgba(239,68,68,0.35)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                background: "rgba(239,68,68,0.18)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+              </svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#fecaca", marginBottom: 5 }}>
+                Backend API is OFFLINE — can't reach <code style={{ fontSize: 12, color: "#fda4af", background: "rgba(248,113,113,0.12)", padding: "2px 6px", borderRadius: 5 }}>{API_URL}</code>
+              </div>
+              <div style={{ fontSize: 12.5, color: "#fca5a5", lineHeight: 1.65, marginBottom: 12 }}>
+                Run these commands inside the <b>Luminal root folder</b> in 3 separate terminals:
+              </div>
+              <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                <div style={{ padding: 11, borderRadius: 10, background: "rgba(0,0,0,0.38)", border: "1px solid rgba(255,255,255,0.06)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  <div style={{ fontSize: 10, color: "#fbbf24", marginBottom: 6, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>① Backend (port 8000)</div>
+                  <div style={{ fontSize: 11, color: "#a5f3fc", lineHeight: 1.7 }}>{`cd /home/amit/Downloads/Old/Stuff/Grind/Luminal
+python3 -m venv venv 2>/dev/null || true
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000`}</div>
+                </div>
+                <div style={{ padding: 11, borderRadius: 10, background: "rgba(0,0,0,0.38)", border: "1px solid rgba(255,255,255,0.06)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  <div style={{ fontSize: 10, color: "#a78bfa", marginBottom: 6, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>② Ollama (optional local)</div>
+                  <div style={{ fontSize: 11, color: "#c4b5fd", lineHeight: 1.7 }}>{`ollama serve
+
+# separate tab, once:
+ollama pull mistral`}</div>
+                </div>
+                <div style={{ padding: 11, borderRadius: 10, background: "rgba(0,0,0,0.38)", border: "1px solid rgba(255,255,255,0.06)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  <div style={{ fontSize: 10, color: "#34d399", marginBottom: 6, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>③ Dashboard (port 3000)</div>
+                  <div style={{ fontSize: 11, color: "#6ee7b7", lineHeight: 1.7 }}>{`cd dashboard
+npm install   # once
+npm run dev`}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  style={{
+                    padding: "7px 14px",
+                    borderRadius: 9,
+                    border: "1px solid rgba(52,211,153,0.35)",
+                    background: "linear-gradient(135deg, rgba(16,185,129,0.18), rgba(5,150,105,0.12))",
+                    color: "#6ee7b7",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 11.5,
+                  }}
+                >
+                  ↻ Re-check & try logging in
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 24 }}

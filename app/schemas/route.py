@@ -1,11 +1,20 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
 class RouteRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     api_key: Optional[str] = Field(default="", description="Optional API key (dashboard uses JWT bearer token instead)")
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Reuse a prior response's session_id to continue that conversation (multi-turn). Omit to start a new conversation.",
+    )
+
+
+class ApprovalRequest(BaseModel):
+    session_id: str
+    approved: bool
 
 
 class RouteResponse(BaseModel):
@@ -16,6 +25,7 @@ class RouteResponse(BaseModel):
     cost: float
     latency_ms: int
     session_id: str
+    citations: List[Dict[str, Any]] = []
 
 
 class LogResponse(BaseModel):

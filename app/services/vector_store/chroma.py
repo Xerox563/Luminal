@@ -72,9 +72,12 @@ class ChromaVectorStore(VectorStore):
         return chunks
 
     async def delete(self, ids: list[str]) -> bool:
+        """Delete all chunks belonging to the given document_ids (as returned by list_documents)."""
         if not self.collection:
             await self.initialize()
-        self.collection.delete(ids=ids)
+        if not ids:
+            return True
+        self.collection.delete(where={"document_id": {"$in": ids}})
         return True
 
     async def list_documents(self, user_id: int) -> list[dict]:
@@ -91,14 +94,17 @@ class ChromaVectorStore(VectorStore):
         for i, doc_id in enumerate(results["ids"]):
             meta = results["metadatas"][i] if results["metadatas"] else {}
             filename = meta.get("filename", "unknown")
-            if filename not in docs_map:
-                docs_map[filename] = {
-                    "id": filename,
+            # document_id is present on chunks ingested after the id-scheme fix;
+            # fall back to filename for chunks ingested before it.
+            group_id = meta.get("document_id") or filename
+            if group_id not in docs_map:
+                docs_map[group_id] = {
+                    "id": group_id,
                     "filename": filename,
                     "chunks_count": 0,
                     "created_at": meta.get("created_at", ""),
                 }
-            docs_map[filename]["chunks_count"] += 1
+            docs_map[group_id]["chunks_count"] += 1
         return list(docs_map.values())
 
     async def get_collection_stats(self) -> dict:

@@ -108,14 +108,49 @@ async def test_cache_key_generation():
     assert key1.startswith("llm_cache:")
 
 
+def _mock_redis_pipeline(zcard_result: int):
+    # pipeline() and its queueing methods (zremrangebyscore/zcard/zadd/expire)
+    # are sync in redis.asyncio — only execute() is a coroutine.
+    mock_pipe = MagicMock()
+    mock_pipe.execute = AsyncMock(return_value=[None, zcard_result, None, None])
+    mock_client = MagicMock()
+    mock_client.pipeline.return_value = mock_pipe
+    return mock_client
+
+
 @pytest.mark.asyncio
 async def test_rate_limit_check():
-    pass
+    from app.services.rate_limit import check_rate_limit
+
+    mock_client = _mock_redis_pipeline(zcard_result=0)  # no requests yet in the window
+
+    with patch('app.services.rate_limit.get_redis', return_value=mock_client):
+        allowed, used, limit = await check_rate_limit("rate_limit:test", limit=5, window=60)
+        assert allowed is True
+        assert used == 1
+        assert limit == 5
 
 
 @pytest.mark.asyncio
 async def test_rate_limit_exceeded():
-    pass
+    from app.services.rate_limit import check_rate_limit
+
+    mock_client = _mock_redis_pipeline(zcard_result=5)  # already at the limit
+
+    with patch('app.services.rate_limit.get_redis', return_value=mock_client):
+        allowed, used, limit = await check_rate_limit("rate_limit:test", limit=5, window=60)
+        assert allowed is False
+        assert used == 5
+        assert limit == 5
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_fails_open_when_redis_unavailable():
+    from app.services.rate_limit import check_rate_limit
+
+    with patch('app.services.rate_limit.get_redis', side_effect=Exception("connection refused")):
+        allowed, used, limit = await check_rate_limit("rate_limit:test", limit=5, window=60)
+        assert allowed is True
 
 
 @pytest.mark.asyncio
