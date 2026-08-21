@@ -12,11 +12,11 @@ import type {
   RagStats,
 } from "@/lib/types";
 import { API_URL } from "@/lib/api";
+import { AuthLanding } from "@/components/auth-landing";
 import {
   StatCard,
   Toast,
   BootLoader,
-  LoginScreen,
   ghostBtn,
   easeOutExpo,
 } from "@/components/ui";
@@ -224,7 +224,7 @@ export default function Dashboard() {
   }
 
   if (!token) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <AuthLanding onAuthenticated={handleLogin} />;
   }
 
   return (
