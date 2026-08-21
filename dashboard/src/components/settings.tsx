@@ -63,7 +63,7 @@ export function SettingsSection({
         method: "PUT",
         body: JSON.stringify(body),
       });
-      setSettings(updated);
+      setSettings((prev) => ({ ...prev, ...updated }));
       setValues({});
       setDirty(false);
       setLlmDirty(false);
@@ -139,7 +139,7 @@ export function SettingsSection({
                   }}
                 >
                   {current ? (
-                    showSecrets ? current : `${current.slice(0, 4)}••••••••${current.slice(-4)}`
+                    current
                   ) : (
                     "Not set — uses .env or empty"
                   )}
