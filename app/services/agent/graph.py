@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -34,11 +35,12 @@ workflow.add_conditional_edges("generate", should_handle_error, {"error_recovery
 workflow.add_edge("error_recovery", "generate")
 
 workflow.add_conditional_edges("critic", should_continue_after_critic, {"generate": "generate", "end": "approval"})
-workflow.add_conditional_edges("approval", should_request_approval, {"approval": "approval", "generate": "generate"})
-workflow.add_edge("approval", "generate")
+workflow.add_conditional_edges("approval", should_request_approval, {"approval": "approval", "generate": "generate", "end": END})
 
 memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
+
+AGENT_TIMEOUT = 60
 
 
 async def run_agent(
@@ -47,6 +49,7 @@ async def run_agent(
     prompt: str,
     config: Optional[Dict] = None
 ) -> AgentState:
+    from datetime import datetime
     initial_state = AgentState(
         session_id=session_id,
         user_id=user_id,
@@ -57,7 +60,38 @@ async def run_agent(
     if config:
         thread_config.update(config)
     
-    result = await app.ainvoke(initial_state, config=thread_config)
+    try:
+        result = await asyncio.wait_for(
+            app.ainvoke(initial_state, config=thread_config),
+            timeout=AGENT_TIMEOUT
+        )
+        result.completed_at = datetime.utcnow()
+        await app.aupdate_state(thread_config, {"completed_at": result.completed_at})
+    except asyncio.TimeoutError:
+        initial_state.completed_at = datetime.utcnow()
+        initial_state.error = "Request timed out. Check your API key and try again."
+        try:
+            await app.aupdate_state(thread_config, {
+                "completed_at": initial_state.completed_at,
+                "error": initial_state.error,
+                "trace": initial_state.trace
+            })
+        except Exception:
+            pass
+        return initial_state
+    except Exception as e:
+        initial_state.completed_at = datetime.utcnow()
+        initial_state.error = str(e)
+        try:
+            await app.aupdate_state(thread_config, {
+                "completed_at": initial_state.completed_at,
+                "error": initial_state.error,
+                "trace": initial_state.trace
+            })
+        except Exception:
+            pass
+        return initial_state
+    
     return result
 
 

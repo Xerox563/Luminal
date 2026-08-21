@@ -35,6 +35,11 @@ class AgentState:
     model_config: Optional[Dict] = None
     
     response: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    tokens_used: int = 0
+    cost: float = 0.0
+    latency_ms: int = 0
     quality_score: Optional[float] = None
     critic_feedback: Optional[str] = None
     should_regenerate: bool = False
@@ -79,6 +84,11 @@ class AgentState:
             "selected_model": self.selected_model,
             "selected_provider": self.selected_provider,
             "response": self.response,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "tokens_used": self.tokens_used,
+            "cost": self.cost,
+            "latency_ms": self.latency_ms,
             "quality_score": self.quality_score,
             "critic_feedback": self.critic_feedback,
             "should_regenerate": self.should_regenerate,
@@ -88,5 +98,6 @@ class AgentState:
             "approval_granted": self.approval_granted,
             "error": self.error,
             "trace": self.trace,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "metadata": self.metadata
         }
