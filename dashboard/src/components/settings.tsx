@@ -18,12 +18,22 @@ interface SettingsMap {
   use_llm_complexity: string;
 }
 
+const PROVIDER_KEYS: Array<keyof SettingsMap> = [
+  "openrouter_api_key", "openai_api_key", "anthropic_api_key", "deepseek_api_key",
+];
+
 const FIELDS: Array<{ key: keyof SettingsMap; label: string; hint: string; secret?: boolean }> = [
   { key: "openrouter_api_key", label: "OpenRouter", hint: "Single key for 100+ models (recommended)", secret: true },
   { key: "openai_api_key", label: "OpenAI", hint: "sk-... (GPT models)", secret: true },
   { key: "anthropic_api_key", label: "Anthropic", hint: "sk-ant-... (Claude models)", secret: true },
   { key: "deepseek_api_key", label: "DeepSeek", hint: "DeepSeek models", secret: true },
 ];
+
+function maskValue(value: string): string {
+  if (!value) return "";
+  if (value.length <= 8) return "••••";
+  return `${value.slice(0, 4)}••••••••${value.slice(-4)}`;
+}
 
 export function SettingsSection({
   token,
@@ -63,7 +73,20 @@ export function SettingsSection({
         method: "PUT",
         body: JSON.stringify(body),
       });
-      setSettings((prev) => ({ ...prev, ...updated }));
+      setSettings((prev) => {
+        const merged = { ...prev };
+        for (const k of Object.keys(updated) as Array<keyof SettingsMap>) {
+          const isProviderKey = PROVIDER_KEYS.includes(k);
+          const userEntered = (values[k] ?? "").trim();
+          if (isProviderKey && userEntered) {
+            merged[k] = maskValue(userEntered);
+          } else if (!isProviderKey || !prev[k]) {
+            merged[k] = updated[k];
+          }
+        }
+        if (llmDirty) merged.use_llm_complexity = updated.use_llm_complexity;
+        return merged;
+      });
       setValues({});
       setDirty(false);
       setLlmDirty(false);
@@ -139,7 +162,11 @@ export function SettingsSection({
                   }}
                 >
                   {current ? (
-                    current
+                    showSecrets && !entered
+                      ? current
+                      : current.length > 8 && !current.includes("••••••••")
+                        ? maskValue(current)
+                        : current
                   ) : (
                     "Not set — uses .env or empty"
                   )}
