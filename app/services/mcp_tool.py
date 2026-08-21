@@ -96,11 +96,14 @@ async def execute_mcp_tool(
     arguments: Dict[str, Any]
 ) -> Dict[str, Any]:
     headers = {"Content-Type": "application/json"}
-    
+
     if tool.auth_type == "api_key" and tool.auth_config:
         api_key = tool.auth_config.get("api_key")
         if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+            # "api_key" auth means a dedicated API-key header (the X-API-Key
+            # convention most tool/REST APIs use), distinct from "bearer"
+            # below which sends an Authorization: Bearer token instead.
+            headers["X-API-Key"] = api_key
     elif tool.auth_type == "bearer" and tool.auth_config:
         token = tool.auth_config.get("token")
         if token:
@@ -112,13 +115,23 @@ async def execute_mcp_tool(
             import base64
             credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
             headers["Authorization"] = f"Basic {credentials}"
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             tool.endpoint_url,
             headers=headers,
             json=arguments
         )
+        # Many external tool APIs (weather lookups, simple GET-based REST
+        # endpoints, etc.) only accept GET with query params, not POST with
+        # a JSON body. Retry as GET before giving up rather than forcing
+        # every registered tool to be POST-only.
+        if response.status_code == 405:
+            response = await client.get(
+                tool.endpoint_url,
+                headers=headers,
+                params=arguments
+            )
         response.raise_for_status()
         return response.json()
 
