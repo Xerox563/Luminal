@@ -200,7 +200,7 @@ async def generate_node(state: AgentState) -> AgentState:
             result = await retry_with_backoff(
                 provider_obj.chat_completion,
                 model=state.selected_model,
-                messages=[m.model_dump() for m in state.messages],
+                messages=[m.model_dump(exclude_none=True) for m in state.messages],
                 max_tokens=max_tokens,
                 temperature=temperature,
                 max_retries=3,
@@ -260,7 +260,7 @@ async def generate_node(state: AgentState) -> AgentState:
                     fallback_start = time.time()
                     result = await ollama.chat_completion(
                         model="mistral:latest",
-                        messages=[m.model_dump() for m in state.messages],
+                        messages=[m.model_dump(exclude_none=True) for m in state.messages],
                         max_tokens=state.model_config.get("max_tokens", 4096),
                         temperature=state.model_config.get("temperature", 0.7)
                     )
