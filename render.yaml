@@ -1,0 +1,63 @@
+# Render Blueprint — deploys the Luminal backend + a free Postgres database
+# together. In the Render dashboard: New -> Blueprint -> point at this repo.
+#
+# Notes:
+# - Render's free Postgres plan is deleted after 90 days unless upgraded to
+#   a paid plan before then — fine for testing/demoing, not for anything
+#   long-lived. Re-run the blueprint (or upgrade the DB) before it expires.
+# - Root Directory must be left blank when creating the web service by hand
+#   (not via this blueprint) — the Dockerfile lives at the repo root.
+# - Health check hits the real /health endpoint already defined in
+#   app/main.py, not just "/" (this app has no route at "/").
+# - REDIS_URL is intentionally left unset here: every place that uses Redis
+#   (response cache, rate limiting) already fails open if it can't connect,
+#   so the app runs fine without one. Add a managed Redis/Key-Value
+#   instance and set REDIS_URL yourself if you want caching/rate limiting.
+# - VECTOR_STORE defaults to chroma, but app/services/vector_store/chroma.py
+#   talks to a separate Chroma *server* over HTTP (CHROMA_HOST/CHROMA_PORT)
+#   — it does not persist to local disk. Render's free tier has no
+#   persistent disk and no managed Chroma service, so RAG document uploads
+#   won't survive a redeploy unless you run your own Chroma server
+#   somewhere and set CHROMA_HOST/CHROMA_PORT, or switch VECTOR_STORE to
+#   "pinecone" (has a real free tier, hosted, no disk needed) and set
+#   PINECONE_API_KEY/PINECONE_INDEX. Everything else (routing, RAG-free
+#   prompts, MCP tools, budgets, dashboard) works fine either way.
+
+databases:
+  - name: luminal-db
+    plan: free
+    databaseName: luminal
+    user: luminal
+
+services:
+  - type: web
+    name: luminal-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: luminal-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: VECTOR_STORE
+        value: chroma
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      # Set this to your deployed dashboard's real URL once you have one,
+      # e.g. https://luminal-frontend.onrender.com — comma-separate if
+      # there's more than one.
+      - key: DEFAULT_PROVIDER
+        value: ollama
+      # Add your provider keys here (or in the Render dashboard's
+      # Environment tab, which keeps them out of this file):
+      # OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+      # DEEPSEEK_API_KEY, NVIDIA_API_KEY, MISTRAL_API_KEY, GEMINI_API_KEY

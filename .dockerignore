@@ -1,0 +1,23 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.pytest_cache/
+.env
+.env.*
+!.env.example
+luminal.db
+luminal.db-journal
+chroma/
+*.log
+
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store

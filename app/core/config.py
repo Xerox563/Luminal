@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     vector_store: str = "chroma"
     app_env: str = "development"
     debug: bool = True
+    # Comma-separated list of allowed frontend origins, e.g.
+    # "https://luminal-frontend.onrender.com,http://localhost:3000".
+    # Defaults to "*" (any origin) for local dev.
+    allowed_origins: str = "*"
 
     class Config:
         env_file = ".env"

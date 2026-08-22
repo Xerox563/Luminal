@@ -13,7 +13,7 @@ Luminal is an intelligent routing system for Large Language Model (LLM) requests
 - Routes the prompt to the most appropriate model based on complexity, budget, and context.
 - Logs every request with cost, tokens, latency, model used, and quality score.
 - Provides a dashboard for monitoring usage, costs, and trends.
-- Supports multiple LLM providers (OpenAI, Anthropic, DeepSeek, Ollama, etc.).
+- Supports 8 LLM providers: OpenAI, Anthropic, DeepSeek, NVIDIA, Mistral, Gemini, OpenRouter, and local Ollama.
 - Enforces budget limits and sends alerts when thresholds are crossed.
 - Offers caching, retries, and failover for reliability.
 
@@ -32,27 +32,22 @@ The final product will be a modular, extensible platform that demonstrates moder
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Option 1 — Docker (easiest, recommended)
+### Option 1 — Docker (easiest)
 
-The repo ships with a `docker-compose.yml` that boots the backend, dashboard, Postgres, Redis, and Chroma together.
+The repo ships with a `docker-compose.yml` that starts the backend, dashboard, Postgres, Redis, and Chroma together.
 
-**Prerequisites:** Docker Desktop (or Docker Engine + Compose plugin) installed.
+Prerequisite: Docker Desktop, or Docker Engine + the Compose plugin.
 
 ```bash
-# 1. Clone the repo
 git clone <your-repo-url> luminal
 cd luminal
-
-# 2. (Optional) edit .env with at least one provider key
-cp .env.example .env       # or just create .env — see "Configuration" below
-
-# 3. Start everything
+cp .env.example .env       # then edit it and add at least one provider key
 docker-compose up -d
 ```
 
-Wait ~30 seconds for the backend to seed the DB and the dashboard to build. Then open:
+Give it about 30 seconds to seed the database and build the dashboard, then open:
 
 | URL | What it is |
 |---|---|
@@ -60,45 +55,41 @@ Wait ~30 seconds for the backend to seed the DB and the dashboard to build. Then
 | http://localhost:8000 | Backend API |
 | http://localhost:8000/docs | Auto-generated FastAPI Swagger docs |
 
-**Default login:** `admin@admin.com` / `admin` — change this immediately under Settings after first login.
+Default login: `admin@admin.com` / `admin` — change this under Settings after your first login.
 
-Stop everything with `docker-compose down`. Wipe all data with `docker-compose down -v`.
+Stop everything with `docker-compose down`. Stop it AND delete all data with `docker-compose down -v`.
 
 ---
 
 ### Option 2 — Run locally without Docker
 
-Useful if you want hot-reload while hacking on the code.
+Use this if you want hot-reload while editing the code. Needs two terminals running at the same time.
 
-**Prerequisites:**
+Prerequisites:
 - Python 3.11+
 - Node.js 18+
-- Postgres 14+ (or just use SQLite for quick experimentation — see `.env` below)
-- Redis 7+ (optional but recommended — response cache)
-- Chroma (optional — only needed for RAG)
+- Postgres 14+ (optional — SQLite works fine for local use, see below)
+- Redis 7+ (optional — only used for response caching and rate limiting)
+- Chroma (optional — only needed if you want RAG/document search)
 
-#### Terminal 1 — backend
+Terminal 1 — backend:
 
 ```bash
 cd luminal
-
-# Create venv and install deps
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Create your .env (see "Configuration" below for what to put)
-cp .env.example .env
+cp .env.example .env       # then edit it and add at least one provider key
 
-# Start the backend with hot-reload
 python3 -m uvicorn app.main:app --port 8000 --reload
 ```
 
-> ⚠️ **The `--reload` flag matters.** Without it, the backend won't pick up code changes and you'll have to manually stop and restart it every time you edit a file.
+The `--reload` flag matters: without it, the backend will not pick up code changes on its own, and you'll have to manually stop and restart it every time you edit a file.
 
-On first start, the backend auto-creates the SQLite database, seeds a default admin user, and registers the default model configs.
+The first time it starts, the backend automatically creates the SQLite database, creates a default admin user, and sets up the default model configs.
 
-#### Terminal 2 — dashboard
+Terminal 2 — dashboard:
 
 ```bash
 cd luminal/dashboard
@@ -110,67 +101,69 @@ Dashboard runs at http://localhost:3000.
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
-Create a `.env` file in the repo root before starting anything. At minimum you need **one provider key** to send real prompts (Ollama is free and runs locally).
+Copy `.env.example` to `.env` in the repo root before starting anything, then fill it in. At minimum you need one provider key to get real answers back (Ollama is free and runs entirely on your own machine, no key needed).
 
-```bash
-# .env
-
-# ── Required for JWT signing in production ─────────────────
-SECRET_KEY=replace-me-with-openssl-rand-hex-32
-
-# ── Database ──────────────────────────────────────────────
-# Dev (default — file-based, no setup needed):
-DATABASE_URL=sqlite+aiosqlite:///./luminal.db
-# Prod (Postgres):
-# DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/luminal
-
-# ── Redis (optional — enables response caching) ───────────
-# REDIS_URL=redis://localhost:6379/0
-
-# ── RAG / Vector store ────────────────────────────────────
-# VECTOR_STORE=chroma          # chroma | pinecone | weaviate
-# CHROMA_HOST=localhost
-# CHROMA_PORT=8000
-
-# ── Provider keys (add at least one) ──────────────────────
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-MISTRAL_API_KEY=...
-DEEPSEEK_API_KEY=...
-GEMINI_API_KEY=...
-NVIDIA_API_KEY=...
-# OPENROUTER_API_KEY=sk-or-...
-# Ollama needs no key — just run `ollama serve` locally
-
-# ── App ───────────────────────────────────────────────────
-APP_ENV=development            # development | production
-DEBUG=true                     # set false in production
-ALLOWED_ORIGINS=http://localhost:3000
-```
-
-Provider keys can also be added **after login** via Dashboard → Settings, without restarting the backend. Anything saved to the DB applies immediately; only `.env` code changes need a restart.
+Provider keys can also be added after logging in, via Dashboard → Settings, without restarting the backend — anything saved there applies immediately. Only actual code changes need a restart; `.env` values are only read once, at startup.
 
 ---
 
-## 🌐 Deployment
+## Deployment
 
-### Option A — Single VPS (DigitalOcean / Hetzner / AWS EC2)
+### Option A — Render (Docker + free-tier Postgres)
 
-Best for fully self-hosted production. One machine, one `docker-compose.yml`.
+The repo includes a ready-to-use `Dockerfile` and a `render.yaml` Blueprint that sets up the backend and a free Postgres database together.
+
+1. Push your repo to GitHub.
+2. In Render: New → Blueprint → pick your repo. It reads `render.yaml` and creates the backend service and database for you.
+3. Once it's up, open the backend service → Environment, and add at least one provider API key (e.g. `MISTRAL_API_KEY`, `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`).
+4. Deploy the dashboard separately (Render Static Site, or Vercel — see Option B below) and point `NEXT_PUBLIC_API_URL` at your Render backend URL.
+
+Things worth knowing about Render's free tier:
+- The free Postgres database is deleted after 90 days unless you upgrade it to a paid plan — fine for testing, not for anything long-lived.
+- There's no free persistent disk, so if you're using Chroma for RAG, uploaded documents won't survive a redeploy. Either skip RAG on the free tier, or switch `VECTOR_STORE` to `pinecone` (which has a real free tier and doesn't need local disk).
+- Redis is optional — the app runs fine without it, it just won't cache responses or rate-limit.
+- `DATABASE_URL` from Render's Postgres works as-is now — the backend automatically rewrites a plain `postgres://` or `postgresql://` URL to use the async driver it needs, no manual editing required.
+
+---
+
+### Option B — Split deploy (frontend + backend on separate free-tier hosts)
+
+- Frontend → Vercel (free)
+- Backend + Postgres → Render (Option A above) or Railway
+
+Frontend on Vercel:
+
+1. Push your repo to GitHub.
+2. Go to vercel.com → New Project → import the repo.
+3. Set Root Directory to `dashboard`.
+4. Add env var `NEXT_PUBLIC_API_URL` = your backend's public URL, no trailing slash.
+5. Deploy.
+
+Backend on Railway (if you'd rather use Railway than Render):
+
+1. Go to railway.app → New Project → Deploy from GitHub repo. Railway auto-detects the `Dockerfile`.
+2. Add a PostgreSQL plugin (and optionally Redis).
+3. Set env vars on the backend service: `DATABASE_URL` (from the Postgres plugin), `REDIS_URL` (from the Redis plugin, optional), `SECRET_KEY` (`openssl rand -hex 32`), `APP_ENV=production`, `VECTOR_STORE=chroma`.
+4. Expose port 8000 and generate a public domain under Settings → Networking.
+5. Use that domain as `NEXT_PUBLIC_API_URL` in Vercel.
+
+---
+
+### Option C — Single VPS (DigitalOcean / Hetzner / AWS EC2)
+
+Best for fully self-hosted, everything-on-one-machine production.
 
 ```bash
-# On a fresh Ubuntu 22.04+ server
 git clone <your-repo-url> luminal && cd luminal
 cp .env.example .env && nano .env       # fill in secrets + provider keys
 docker-compose up -d
 ```
 
-Open ports `3000` and `8000` in your firewall, then put **Caddy** in front for HTTPS:
+Open ports 3000 and 8000 in your firewall, then put a reverse proxy like Caddy in front for HTTPS:
 
 ```caddyfile
-# /etc/caddy/Caddyfile
 luminal.yourdomain.com {
     reverse_proxy localhost:3000
 }
@@ -179,7 +172,7 @@ api.luminal.yourdomain.com {
 }
 ```
 
-Finally, update `docker-compose.yml` so the dashboard knows the public backend URL:
+Then point the dashboard at the public backend URL:
 
 ```yaml
 dashboard:
@@ -187,63 +180,11 @@ dashboard:
     - NEXT_PUBLIC_API_URL=https://api.luminal.yourdomain.com
 ```
 
-Rebuild: `docker-compose up -d --build dashboard`.
+Rebuild with `docker-compose up -d --build dashboard`.
 
 ---
 
-### Option B — Split deploy (best free-tier combo)
-
-- **Frontend** → Vercel (free)
-- **Backend + Postgres + Redis + Chroma** → Railway / Render / Fly.io
-
-#### Frontend on Vercel
-
-1. Push your repo to GitHub.
-2. Go to [vercel.com](https://vercel.com) → **New Project** → import the repo.
-3. Set **Root Directory** to `dashboard`.
-4. Add env var: `NEXT_PUBLIC_API_URL` = your backend public URL (e.g. `https://api.luminal.up.railway.app`). No trailing slash.
-5. Click **Deploy**.
-
-#### Backend on Railway
-
-1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
-2. Select your repo — Railway auto-detects the `Dockerfile`.
-3. Add plugins: **PostgreSQL**, **Redis** (Railway provides both).
-4. Set env vars in the backend service:
-
-```
-DATABASE_URL = <from Railway Postgres plugin, prepend postgresql+asyncpg://>
-REDIS_URL    = <from Railway Redis plugin>
-SECRET_KEY   = <openssl rand -hex 32>
-APP_ENV      = production
-VECTOR_STORE = chroma
-```
-
-5. Expose port `8000` and generate a public domain under **Settings → Networking**.
-6. Use that domain as `NEXT_PUBLIC_API_URL` in Vercel.
-
----
-
-### Option C — All-in-one on Fly.io
-
-Fly.io can run the whole stack on a single machine with one command.
-
-```bash
-curl -L https://fly.io/install.sh | sh
-
-cd luminal
-fly launch                  # generates fly.toml from docker-compose
-fly secrets set \
-  DATABASE_URL=postgresql+asyncpg://... \
-  REDIS_URL=redis://... \
-  SECRET_KEY=$(openssl rand -hex 32)
-
-fly deploy
-```
-
----
-
-## ✅ Production checklist
+## Production checklist
 
 Before pointing real traffic at a Luminal instance:
 
@@ -251,30 +192,30 @@ Before pointing real traffic at a Luminal instance:
 |---|---|
 | `SECRET_KEY` | Long random string: `openssl rand -hex 32` |
 | `DATABASE_URL` | Postgres — SQLite is dev-only |
-| `REDIS_URL` | Required for response cache & rate limits |
-| `NEXT_PUBLIC_API_URL` | Must match backend public URL, no trailing slash |
-| `ALLOWED_ORIGINS` | CORS — add your real frontend domain |
-| `DEBUG=false` | Turn off debug output |
+| `REDIS_URL` | Optional, but needed for response caching and rate limiting |
+| `NEXT_PUBLIC_API_URL` | Must match the backend's public URL, no trailing slash |
+| `ALLOWED_ORIGINS` | CORS — set this to your real frontend domain instead of `*` |
+| `DEBUG=false` | Turns off debug output |
 | `APP_ENV=production` | Enables stricter validation |
-| Provider keys | Add at least one via dashboard Settings, or paste in `.env` |
-| Change `admin` password | First thing after first login |
-| HTTPS | Put Caddy / nginx / Cloudflare in front |
+| Provider keys | Add at least one, via dashboard Settings or `.env` |
+| Change the `admin` password | First thing to do after your first login |
+| HTTPS | Put Caddy, nginx, or Cloudflare in front |
 | Backups | Schedule `pg_dump` of Postgres if self-hosted |
 
 ---
 
-## 🧪 Verifying your install
+## Verifying your install
 
 After starting everything:
 
 ```bash
 # Backend health check
-curl http://localhost:8000/
+curl http://localhost:8000/health
 
-# Login (use default creds or what you set)
+# Log in (use the default admin creds, or whatever you set)
+# Note: this endpoint takes form fields, not JSON
 curl -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@admin.com","password":"admin"}'
+  -d "username=admin@admin.com&password=admin"
 
 # Send a prompt
 curl -X POST http://localhost:8000/route \
@@ -283,7 +224,7 @@ curl -X POST http://localhost:8000/route \
   -d '{"prompt":"What is the capital of France?"}'
 ```
 
-If the first prompt comes back with a model answer and shows up under Dashboard → Recent Logs, you're fully wired up. 🎉
+If that last request comes back with a model answer, and it shows up under Dashboard → Logs, everything is wired up correctly.
 
 ---
 
@@ -295,16 +236,16 @@ If the first prompt comes back with a model answer and shows up under Dashboard 
 
 #### Subtasks
 
-1. **Project Scaffold** – Initialize repo with FastAPI, Docker, environment config, and folder structure. ✅
-2. **Database Models** – Define SQLAlchemy models for `User`, `APIKey`, `ModelConfig`, and `ExecutionLog`. ✅
-3. **User & API Key Management** – Implement registration, login, and CRUD endpoints for API keys. ✅
-4. **POST /route Endpoint** – Accept user prompt and API key; validate key. ✅
-5. **Basic Complexity Scorer** – Use heuristic scoring (prompt length, keywords, question type) to classify low/medium/high. ✅
-6. **Router Logic** – Read user’s model mapping (complexity → model name) from DB and choose model. ✅
-7. **OpenRouter Client** – Integrate HTTP client to call OpenRouter with selected model; parse response. ✅
-8. **Logging** – Save every request to `ExecutionLog` with prompt, model, tokens, cost, latency, timestamp. ✅
-9. **Simple Dashboard** – Backend APIs for today’s cost/requests and a minimal Next.js page to display them. ✅
-10. **Tests** – Unit tests for complexity scorer, router, and logging. ✅
+1. **Project Scaffold** – Initialize repo with FastAPI, Docker, environment config, and folder structure. (done)
+2. **Database Models** – Define SQLAlchemy models for `User`, `APIKey`, `ModelConfig`, and `ExecutionLog`. (done)
+3. **User & API Key Management** – Implement registration, login, and CRUD endpoints for API keys. (done)
+4. **POST /route Endpoint** – Accept user prompt and API key; validate key. (done)
+5. **Basic Complexity Scorer** – Use heuristic scoring (prompt length, keywords, question type) to classify low/medium/high. (done)
+6. **Router Logic** – Read user’s model mapping (complexity → model name) from DB and choose model. (done)
+7. **OpenRouter Client** – Integrate HTTP client to call OpenRouter with selected model; parse response. (done)
+8. **Logging** – Save every request to `ExecutionLog` with prompt, model, tokens, cost, latency, timestamp. (done)
+9. **Simple Dashboard** – Backend APIs for today’s cost/requests and a minimal Next.js page to display them. (done)
+10. **Tests** – Unit tests for complexity scorer, router, and logging. (done)
 
 ---
 
@@ -314,16 +255,16 @@ If the first prompt comes back with a model answer and shows up under Dashboard 
 
 #### Subtasks
 
-1. **Provider Abstraction** – Create adapter interface for LLM providers; implement for OpenAI, Anthropic, DeepSeek, Ollama. ✅
-2. **Enhanced Complexity Detection** – Replace heuristics with a small ML model or LLM‑as‑judge. ✅
-3. **Budget Management** – Add user fields: monthly budget, current spend, projected spend; implement monthly reset. ✅
-4. **Budget‑Aware Routing** – Modify router to check budget before selection; force cheaper model if threshold exceeded. ✅
-5. **Redis Caching** – Cache responses for identical prompts (hash) and optionally similar prompts using embeddings. ✅
-6. **Retry & Fallback** – On failure, retry with exponential backoff; if still fails, try a fallback model. ✅
-7. **Streaming Support** – Add Server‑Sent Events (SSE) endpoint for streaming token responses. ✅
-8. **Rate Limiting** – Implement Redis‑based rate limiting per API key. ✅
-9. **Dashboard Expansion** – Show cost breakdown by model, budget status, and monthly trends. ✅
-10. **Integration Tests** – Test multi‑provider routing, budget enforcement, and caching. ✅
+1. **Provider Abstraction** – Create adapter interface for LLM providers; implement for OpenAI, Anthropic, DeepSeek, Ollama. (done)
+2. **Enhanced Complexity Detection** – Replace heuristics with a small ML model or LLM‑as‑judge. (done)
+3. **Budget Management** – Add user fields: monthly budget, current spend, projected spend; implement monthly reset. (done)
+4. **Budget‑Aware Routing** – Modify router to check budget before selection; force cheaper model if threshold exceeded. (done)
+5. **Redis Caching** – Cache responses for identical prompts (hash) and optionally similar prompts using embeddings. (done)
+6. **Retry & Fallback** – On failure, retry with exponential backoff; if still fails, try a fallback model. (done)
+7. **Streaming Support** – Add Server‑Sent Events (SSE) endpoint for streaming token responses. (done)
+8. **Rate Limiting** – Implement Redis‑based rate limiting per API key. (done)
+9. **Dashboard Expansion** – Show cost breakdown by model, budget status, and monthly trends. (done)
+10. **Integration Tests** – Test multi‑provider routing, budget enforcement, and caching. (done)
 
 ---
 
@@ -333,16 +274,16 @@ If the first prompt comes back with a model answer and shows up under Dashboard 
 
 #### Subtasks
 
-1. **Vector Database Setup** – Integrate Chroma (dev) and configurable Pinecone/Weaviate (prod) with embedding model. ✅
-2. **Document Ingestion** – Create endpoints/scripts to upload files, chunk text, embed, and store vectors. ✅
-3. **Retrieval Module** – Build function that takes a query and returns top‑k relevant chunks with scores. ✅
-4. **Context Injection** – In `/route`, detect if query needs external knowledge; if yes, retrieve and prepend to prompt. ✅
-5. **MCP Client/Server** – Implement MCP server that can register tools (e.g., weather API, database query). ✅
-6. **Tool‑Calling Logic** – Add a decision step (heuristic or LLM) to determine if a tool should be called. ✅
-7. **Tool Execution** – Call the selected tool via MCP, capture result, and merge into prompt. ✅
-8. **Source Citations** – When RAG is used, append citations to the response and log them. ✅
-9. **Logging & Dashboard** – Extend `ExecutionLog` to include retrieval and tool metadata; update dashboard. ✅
-10. **Unit Tests** – Test retrieval, tool calling, and context injection. ✅
+1. **Vector Database Setup** – Integrate Chroma (dev) and configurable Pinecone/Weaviate (prod) with embedding model. (done)
+2. **Document Ingestion** – Create endpoints/scripts to upload files, chunk text, embed, and store vectors. (done)
+3. **Retrieval Module** – Build function that takes a query and returns top‑k relevant chunks with scores. (done)
+4. **Context Injection** – In `/route`, detect if query needs external knowledge; if yes, retrieve and prepend to prompt. (done)
+5. **MCP Client/Server** – Implement MCP server that can register tools (e.g., weather API, database query). (done)
+6. **Tool‑Calling Logic** – Add a decision step (heuristic or LLM) to determine if a tool should be called. (done)
+7. **Tool Execution** – Call the selected tool via MCP, capture result, and merge into prompt. (done)
+8. **Source Citations** – When RAG is used, append citations to the response and log them. (done)
+9. **Logging & Dashboard** – Extend `ExecutionLog` to include retrieval and tool metadata; update dashboard. (done)
+10. **Unit Tests** – Test retrieval, tool calling, and context injection. (done)
 
 ---
 
@@ -352,16 +293,16 @@ If the first prompt comes back with a model answer and shows up under Dashboard 
 
 #### Subtasks
 
-1. **LangGraph State Machine** – Refactor routing pipeline into LangGraph nodes: `analyze` → `retrieve` → `tool` → `route` → `generate`. ✅
-2. **Conversation State** – Persist conversation history and context across multiple turns (session management). ✅
-3. **Critic Agent** – Add a node that reviews the generated response and scores quality; if low, re‑generate with stronger model. ✅
-4. **Human‑in‑the‑Loop** – For high‑risk tool actions (e.g., refund, email), pause and ask for user approval via callback. ✅
-5. **Error Recovery** – On tool failure or low confidence, loop back to previous nodes with different parameters. ✅
-6. **Tracing** – Integrate LangSmith or OpenTelemetry to log agent decisions and state transitions. ✅
-7. **Router Integration** – Make routing decision consider agent state (e.g., previous failures, quality history). ✅
-8. **Integration Tests** – Test multi‑step agent workflows, critic loops, and approval flows. ✅
-9. **Dashboard Update** – Show agent decision trace and loop counts. ✅
-10. **Performance Optimisation** – Cache intermediate agent results to reduce latency. ✅
+1. **LangGraph State Machine** – Refactor routing pipeline into LangGraph nodes: `analyze` → `retrieve` → `tool` → `route` → `generate`. (done)
+2. **Conversation State** – Persist conversation history and context across multiple turns (session management). (done)
+3. **Critic Agent** – Add a node that reviews the generated response and scores quality; if low, re‑generate with stronger model. (done)
+4. **Human‑in‑the‑Loop** – For high‑risk tool actions (e.g., refund, email), pause and ask for user approval via callback. (done)
+5. **Error Recovery** – On tool failure or low confidence, loop back to previous nodes with different parameters. (done)
+6. **Tracing** – Integrate LangSmith or OpenTelemetry to log agent decisions and state transitions. (done)
+7. **Router Integration** – Make routing decision consider agent state (e.g., previous failures, quality history). (done)
+8. **Integration Tests** – Test multi‑step agent workflows, critic loops, and approval flows. (done)
+9. **Dashboard Update** – Show agent decision trace and loop counts. (done)
+10. **Performance Optimisation** – Cache intermediate agent results to reduce latency. (done)
 
 ---
 
