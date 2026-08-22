@@ -1,0 +1,382 @@
+LUMINAL — HOW TO USE IT (PLAIN LANGUAGE GUIDE)
+================================================
+
+This file explains, in simple terms, what Luminal is, how to run it, how to
+get an API key, how to send prompts to it from your own apps, and how every
+piece of it (RAG, MCP tools, budgets, providers) actually works. No jargon
+you don't need — just what to do and why.
+
+
+1. WHAT LUMINAL IS
+-------------------
+
+Luminal sits between your app and the AI companies (OpenAI, Anthropic,
+Mistral, etc). Instead of your app calling those companies directly, it
+calls Luminal. Luminal then:
+
+  1. Looks at how hard your question is (simple vs. complex).
+  2. Picks the cheapest model that can actually handle it.
+  3. Optionally pulls in extra info from documents you've uploaded (RAG).
+  4. Optionally calls an outside tool (like a weather API) if the prompt
+     needs one.
+  5. Sends the final prompt to the real AI model and gets an answer back.
+  6. Logs everything — cost, tokens used, which model answered, how long it
+     took — so you can see it all on the dashboard.
+
+Two parts run at the same time:
+  - The BACKEND (the actual gateway/API) — runs on port 8000.
+  - The DASHBOARD (the web UI you look at in a browser) — runs on port 3000.
+
+
+2. HOW TO RUN IT
+-----------------
+
+You need TWO terminals open at the same time, both running.
+
+Terminal 1 — start the backend (run this from the Luminal folder root):
+
+    source venv/bin/activate
+    python3 -m uvicorn app.main:app --port 8000 --reload
+
+  The --reload flag matters — without it, the backend will NOT pick up any
+  code changes automatically, and you'll have to manually stop and restart
+  it every time something is fixed or changed.
+
+Terminal 2 — start the dashboard:
+
+    cd dashboard
+    npm run dev
+
+  Then open http://localhost:3000 in your browser.
+
+Before either will work properly, you need a `.env` file in the Luminal
+root folder with at least one provider's API key in it (see section 6).
+
+
+3. LOGGING IN
+--------------
+
+The backend automatically creates a default admin account the first time it
+starts:
+
+    email:    admin@admin.com
+    password: admin
+
+Use this to log into the dashboard at http://localhost:3000. You can create
+more accounts too — the dashboard's sign-up flow handles that.
+
+Under the hood this login gives your browser a JWT (a signed login token).
+That's what the dashboard uses to talk to the backend on your behalf. You
+don't need to think about this — it's handled automatically once you're
+logged in.
+
+
+4. GETTING A LUMINAL API KEY (FOR YOUR OWN APPS)
+--------------------------------------------------
+
+The JWT from logging in only works for the dashboard itself. If you want
+some OTHER app (a script, a curl command, another service) to send prompts
+to Luminal, you need a Luminal API key instead. These always start with
+`lum_`.
+
+How to get one:
+  1. Log into the dashboard.
+  2. Go to the API Keys section.
+  3. Click "Create key", give it a name.
+  4. Copy the key immediately — it's shown once, in full, and never again
+     (only a masked version is shown after that).
+
+Once you have a key, any app can use it like this:
+
+    curl -X POST http://localhost:8000/route \
+      -H "Authorization: Bearer lum_YOUR_KEY_HERE" \
+      -H "Content-Type: application/json" \
+      -d '{"prompt": "What is the capital of France?"}'
+
+That's it — no SDK needed, just plain HTTP with your key as a Bearer token.
+Works from Python, JavaScript, curl, Postman, anything that can make an
+HTTP request.
+
+
+5. SENDING A PROMPT — THE MAIN ENDPOINT
+------------------------------------------
+
+    POST /route
+
+Request body (JSON):
+
+    {
+      "prompt": "your question here",
+      "session_id": null
+    }
+
+  - "prompt" (required) — the thing you're asking.
+  - "session_id" (optional) — leave it out / null to start a fresh
+    conversation. To CONTINUE a previous conversation (multi-turn, so the
+    model remembers earlier messages), pass back the session_id you got in
+    an earlier response.
+
+Response body (JSON):
+
+    {
+      "content": "the model's answer",
+      "model": "mistral-small-latest",
+      "complexity": "low",
+      "tokens_used": 169,
+      "cost": 0.000034,
+      "latency_ms": 1720,
+      "session_id": "user_2_8d69624f9f15",
+      "citations": []
+    }
+
+  - "content" — the actual answer text (comes back as Markdown — bold,
+    lists, tables, etc. The dashboard renders this properly; if you're
+    building your own UI on top of Luminal, render it as Markdown too
+    instead of showing the raw ** and ### symbols as plain text).
+  - "model" / "complexity" — which model Luminal picked and why (based on
+    how complex your prompt looked).
+  - "cost" / "tokens_used" / "latency_ms" — what that one request cost you.
+  - "session_id" — save this if you want to continue the conversation next
+    time.
+  - "citations" — filled in only when RAG (document search) was used to
+    help answer your question.
+
+If your monthly budget is used up, you'll get back an HTTP 402 error
+instead of an answer.
+
+
+6. PROVIDERS — WHERE THE ACTUAL AI COMES FROM
+-------------------------------------------------
+
+Luminal doesn't have its own AI — it calls out to real providers. It
+currently supports 8:
+
+    OpenAI, Anthropic, DeepSeek, NVIDIA, Mistral, Gemini, OpenRouter, Ollama
+
+Ollama is special — it runs completely on your own computer for free (no
+API key, no internet, no cost), using whatever local models you've pulled
+with `ollama pull <model>`. All the others are cloud providers and need an
+API key from that company.
+
+To add a provider's key:
+  1. Dashboard → Settings.
+  2. Paste the key into that provider's box.
+  3. Click "Update Settings" (this applies immediately, no restart needed
+     — as long as the backend is already running the latest code; see the
+     TROUBLESHOOTING section if a change doesn't seem to take effect).
+
+Choosing which provider Luminal actually uses:
+  - In the "Route a Prompt" playground, there's a Model Source toggle
+    (Local/Ollama, Cloud/OpenRouter, NVIDIA, Mistral, Gemini) — clicking
+    one switches which provider ALL your requests go through by default.
+  - The same choice is also in Settings under "Default Provider" — same
+    setting, just reachable two ways.
+  - Whichever provider is selected, Luminal still picks a cheap/medium/
+    expensive MODEL from that provider depending on how complex your
+    prompt looked (three tiers: low/medium/high complexity).
+
+Note: selecting a provider in the toggle does NOT save its API key for
+you — you still have to paste the actual key into Settings separately.
+The toggle only decides where requests get routed to; Settings is where
+you authenticate with that provider.
+
+
+7. RAG — ASKING QUESTIONS ABOUT YOUR OWN DOCUMENTS
+-------------------------------------------------------
+
+RAG means: Luminal can read documents you upload and use them to answer
+your questions more accurately, with citations back to the source.
+
+How to use it:
+  1. Dashboard → Documents.
+  2. Upload a PDF, Markdown, or text file.
+  3. Luminal automatically splits it into chunks, turns those chunks into
+     searchable embeddings, and stores them (Chroma by default; Pinecone
+     or Weaviate are also supported if configured).
+
+RAG doesn't run on every single prompt — it only kicks in when your prompt
+sounds like a knowledge/lookup question (contains words like "what is",
+"explain", "according to", "document", "summary of", etc.). A prompt like
+"hi" won't trigger it; a prompt like "what is our refund policy" will.
+
+When RAG does trigger, the response's "citations" field will be filled in
+with which document chunks were used.
+
+
+8. MCP TOOLS — LETTING LUMINAL CALL YOUR OWN APIs
+-------------------------------------------------------
+
+MCP tools are external APIs you register with Luminal so the model can
+call them when it needs real, live data (weather, order status, a
+calculator — anything you can put behind an HTTP endpoint).
+
+How to register one:
+  1. Dashboard → MCP Tools → Add Tool.
+  2. Fill in:
+       - Tool Name — a short label.
+       - Endpoint URL — the full URL of your API (e.g.
+         http://localhost:8008/tools/weather).
+       - Description — helps you remember what it does.
+       - Trigger Keywords — comma-separated words that, if they appear in
+         a prompt, tell Luminal "this prompt probably needs this tool"
+         (e.g. weather, temperature, forecast).
+       - Auth Type — how your endpoint expects to be authenticated:
+           none    — no auth header sent.
+           api_key — sends your key in an "X-API-Key" header.
+           bearer  — sends your key as "Authorization: Bearer <token>".
+           basic   — sends username/password as HTTP Basic auth.
+       - Parameters Schema — a small JSON example of what arguments your
+         endpoint expects, e.g. {"city": "string"}.
+       - Requires approval before execution — if checked, Luminal will
+         PAUSE the request and wait for you to manually approve it in the
+         dashboard before it actually calls your tool. Useful for
+         anything risky (sending an email, charging a card, etc).
+
+  3. Save. From then on, any prompt containing one of your trigger
+     keywords will make Luminal call that tool automatically and feed the
+     result back into the model's answer.
+
+Technical note: Luminal tries POSTing your arguments as JSON first; if
+your endpoint replies "405 Method Not Allowed" (meaning it only accepts
+GET), Luminal automatically retries as a GET request with the arguments
+as query parameters instead. So both GET-style and POST-style tool APIs
+work without any extra configuration.
+
+
+9. BUDGETS — CONTROLLING SPEND
+-----------------------------------
+
+Every account has a monthly budget (in dollars).
+
+  - Dashboard → Monthly Budget panel → Edit → type a number → Save.
+  - At 80% of your budget spent, Luminal automatically starts downgrading
+    to a cheaper model tier for new requests.
+  - At 95% spent, it pins everything to the cheapest available model.
+  - At 100% (budget fully used), new requests are rejected outright (HTTP
+    402 Payment Required) until the budget resets.
+  - The budget automatically resets back to 0 spent at the start of each
+    calendar month.
+
+Local Ollama requests are always free ($0 cost) since nothing is being
+paid to a cloud provider — they don't count against your budget in a
+meaningful way, though they're still logged.
+
+
+10. WATCHING A LIVE TRACE (SEEING THE PIPELINE THINK)
+-----------------------------------------------------------
+
+Every request runs through several stages: analyze → retrieve (RAG) →
+tool (MCP) → route → generate → critic. You can watch these happen live,
+step by step, instead of just waiting for the final answer.
+
+  - If you send a prompt from the dashboard's own "Route a Prompt"
+    playground, the trace terminal on the right shows it automatically —
+    nothing extra to do.
+
+  - If a request came from SOMEWHERE ELSE (curl, another app, using a
+    lum_ API key), the dashboard doesn't automatically know about it.
+    To watch it anyway: every /route response includes a "session_id" —
+    copy that value, paste it into the "Watch another session_id…" box
+    in the trace terminal, and click Watch. You'll see that request's
+    trace live (or its full trace immediately, if it already finished by
+    the time you paste it in).
+
+
+11. THE DASHBOARD, PANEL BY PANEL
+--------------------------------------
+
+  - Top stat cards — requests/cost/tokens today, this month, and how much
+    budget is left.
+  - Cost & Usage Trend — a chart of cost and request count per day, over
+    the last 30 days.
+  - Monthly Budget — the circular gauge showing % of budget used, and
+    where you edit your budget limit.
+  - RAG & Tool Usage — what % of your requests actually used document
+    retrieval vs. tool calls, and their average cost/latency.
+  - Model Performance — cost, tokens, latency, and quality score broken
+    down per model you've actually used.
+  - Route a Prompt — the playground where you type a prompt, pick a
+    provider, and see the live trace + answer.
+  - Documents — upload/manage files for RAG.
+  - MCP Tools — register/manage external tool APIs.
+  - API Keys — create/revoke lum_ keys for external apps.
+  - Logs — a table of every request ever made, with full details.
+  - Settings — provider API keys, default provider, and whether to use an
+    LLM (instead of simple keyword heuristics) to judge prompt complexity.
+
+
+12. QUICK ENDPOINT REFERENCE
+----------------------------------
+
+Auth:
+  POST /auth/register          create an account
+  POST /auth/login             log in, get a JWT (used by the dashboard)
+  GET  /auth/me                get the logged-in user's info
+
+API keys:
+  POST   /api-keys             create a new lum_ key
+  GET    /api-keys             list your keys (masked)
+  DELETE /api-keys/{id}        revoke a key
+
+Routing (the core feature):
+  POST /route                  send a prompt, get an answer
+  POST /route/stream           same, but streamed token-by-token
+  POST /route/approve          approve/deny a tool call that's paused
+                                waiting for your OK
+  GET  /route/trace/{session_id}   live trace of one request (SSE)
+
+Documents / RAG:
+  POST   /documents/upload     upload a file to be searchable
+  GET    /documents            list uploaded documents
+  DELETE /documents/{id}       remove one
+
+Dashboard data:
+  GET /dashboard/stats             today/month totals
+  GET /dashboard/budget            current budget status
+  GET /dashboard/cost-breakdown    daily cost/request trend
+  GET /dashboard/model-performance per-model stats
+  GET /dashboard/rag-stats         RAG/tool usage stats
+  GET /dashboard/logs              full request history
+
+Settings:
+  GET /dashboard/settings          current provider keys (masked) + config
+  PUT /dashboard/settings          update provider keys / default provider
+
+MCP tools:
+  GET    /dashboard/mcp-tools        list your registered tools
+  POST   /dashboard/mcp-tools        register a new one
+  PATCH  /dashboard/mcp-tools/{id}   edit one
+  DELETE /dashboard/mcp-tools/{id}   remove one
+
+
+13. TROUBLESHOOTING
+--------------------------
+
+"I changed a setting / added an API key and nothing changed."
+  → Make sure the backend was started WITH --reload. If it wasn't, it
+    will never pick up code changes on its own — you have to manually
+    stop it (Ctrl+C) and run the start command again. Settings saved to
+    the database (API keys, default provider, budget) apply instantly
+    without a restart; only actual CODE changes need a restart.
+
+"I get a 402 error."
+  → Your monthly budget is used up, or a cloud provider rejected the
+    request for billing reasons (e.g. no credits on that provider's
+    account). Check Settings → provider keys, or switch to Ollama
+    (free/local) temporarily.
+
+"I get a 405 error calling my own MCP tool."
+  → Luminal automatically retries as GET if POST gets a 405, so this
+    should self-resolve. If it still fails, double check your endpoint's
+    auth header expectations match the Auth Type you picked when
+    registering the tool.
+
+"The trace panel is empty / stuck on IDLE."
+  → It only auto-connects for prompts sent from the dashboard's own
+    playground. For external requests, paste that request's session_id
+    into the "Watch another session_id…" box (see section 10).
+
+"Ollama error: All connection attempts failed."
+  → Ollama isn't running locally. Run `ollama serve` in a terminal, and
+    make sure you've pulled the model it's asking for, e.g.
+    `ollama pull mistral`.
