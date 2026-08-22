@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Luminal — The cheapest LLM that can actually answer',
+  title: 'Luminal',
   description: 'Self-hosted AI gateway. Scores every prompt, retrieves context, calls tools, picks the right model, and logs everything for cost & quality analytics.',
 }
 

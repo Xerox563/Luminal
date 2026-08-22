@@ -32,6 +32,261 @@ The final product will be a modular, extensible platform that demonstrates moder
 
 ---
 
+## 🚀 Quick Start
+
+### Option 1 — Docker (easiest, recommended)
+
+The repo ships with a `docker-compose.yml` that boots the backend, dashboard, Postgres, Redis, and Chroma together.
+
+**Prerequisites:** Docker Desktop (or Docker Engine + Compose plugin) installed.
+
+```bash
+# 1. Clone the repo
+git clone <your-repo-url> luminal
+cd luminal
+
+# 2. (Optional) edit .env with at least one provider key
+cp .env.example .env       # or just create .env — see "Configuration" below
+
+# 3. Start everything
+docker-compose up -d
+```
+
+Wait ~30 seconds for the backend to seed the DB and the dashboard to build. Then open:
+
+| URL | What it is |
+|---|---|
+| http://localhost:3000 | Dashboard (frontend) |
+| http://localhost:8000 | Backend API |
+| http://localhost:8000/docs | Auto-generated FastAPI Swagger docs |
+
+**Default login:** `admin@admin.com` / `admin` — change this immediately under Settings after first login.
+
+Stop everything with `docker-compose down`. Wipe all data with `docker-compose down -v`.
+
+---
+
+### Option 2 — Run locally without Docker
+
+Useful if you want hot-reload while hacking on the code.
+
+**Prerequisites:**
+- Python 3.11+
+- Node.js 18+
+- Postgres 14+ (or just use SQLite for quick experimentation — see `.env` below)
+- Redis 7+ (optional but recommended — response cache)
+- Chroma (optional — only needed for RAG)
+
+#### Terminal 1 — backend
+
+```bash
+cd luminal
+
+# Create venv and install deps
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Create your .env (see "Configuration" below for what to put)
+cp .env.example .env
+
+# Start the backend with hot-reload
+python3 -m uvicorn app.main:app --port 8000 --reload
+```
+
+> ⚠️ **The `--reload` flag matters.** Without it, the backend won't pick up code changes and you'll have to manually stop and restart it every time you edit a file.
+
+On first start, the backend auto-creates the SQLite database, seeds a default admin user, and registers the default model configs.
+
+#### Terminal 2 — dashboard
+
+```bash
+cd luminal/dashboard
+npm install
+npm run dev
+```
+
+Dashboard runs at http://localhost:3000.
+
+---
+
+## ⚙️ Configuration
+
+Create a `.env` file in the repo root before starting anything. At minimum you need **one provider key** to send real prompts (Ollama is free and runs locally).
+
+```bash
+# .env
+
+# ── Required for JWT signing in production ─────────────────
+SECRET_KEY=replace-me-with-openssl-rand-hex-32
+
+# ── Database ──────────────────────────────────────────────
+# Dev (default — file-based, no setup needed):
+DATABASE_URL=sqlite+aiosqlite:///./luminal.db
+# Prod (Postgres):
+# DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/luminal
+
+# ── Redis (optional — enables response caching) ───────────
+# REDIS_URL=redis://localhost:6379/0
+
+# ── RAG / Vector store ────────────────────────────────────
+# VECTOR_STORE=chroma          # chroma | pinecone | weaviate
+# CHROMA_HOST=localhost
+# CHROMA_PORT=8000
+
+# ── Provider keys (add at least one) ──────────────────────
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+MISTRAL_API_KEY=...
+DEEPSEEK_API_KEY=...
+GEMINI_API_KEY=...
+NVIDIA_API_KEY=...
+# OPENROUTER_API_KEY=sk-or-...
+# Ollama needs no key — just run `ollama serve` locally
+
+# ── App ───────────────────────────────────────────────────
+APP_ENV=development            # development | production
+DEBUG=true                     # set false in production
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+Provider keys can also be added **after login** via Dashboard → Settings, without restarting the backend. Anything saved to the DB applies immediately; only `.env` code changes need a restart.
+
+---
+
+## 🌐 Deployment
+
+### Option A — Single VPS (DigitalOcean / Hetzner / AWS EC2)
+
+Best for fully self-hosted production. One machine, one `docker-compose.yml`.
+
+```bash
+# On a fresh Ubuntu 22.04+ server
+git clone <your-repo-url> luminal && cd luminal
+cp .env.example .env && nano .env       # fill in secrets + provider keys
+docker-compose up -d
+```
+
+Open ports `3000` and `8000` in your firewall, then put **Caddy** in front for HTTPS:
+
+```caddyfile
+# /etc/caddy/Caddyfile
+luminal.yourdomain.com {
+    reverse_proxy localhost:3000
+}
+api.luminal.yourdomain.com {
+    reverse_proxy localhost:8000
+}
+```
+
+Finally, update `docker-compose.yml` so the dashboard knows the public backend URL:
+
+```yaml
+dashboard:
+  environment:
+    - NEXT_PUBLIC_API_URL=https://api.luminal.yourdomain.com
+```
+
+Rebuild: `docker-compose up -d --build dashboard`.
+
+---
+
+### Option B — Split deploy (best free-tier combo)
+
+- **Frontend** → Vercel (free)
+- **Backend + Postgres + Redis + Chroma** → Railway / Render / Fly.io
+
+#### Frontend on Vercel
+
+1. Push your repo to GitHub.
+2. Go to [vercel.com](https://vercel.com) → **New Project** → import the repo.
+3. Set **Root Directory** to `dashboard`.
+4. Add env var: `NEXT_PUBLIC_API_URL` = your backend public URL (e.g. `https://api.luminal.up.railway.app`). No trailing slash.
+5. Click **Deploy**.
+
+#### Backend on Railway
+
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
+2. Select your repo — Railway auto-detects the `Dockerfile`.
+3. Add plugins: **PostgreSQL**, **Redis** (Railway provides both).
+4. Set env vars in the backend service:
+
+```
+DATABASE_URL = <from Railway Postgres plugin, prepend postgresql+asyncpg://>
+REDIS_URL    = <from Railway Redis plugin>
+SECRET_KEY   = <openssl rand -hex 32>
+APP_ENV      = production
+VECTOR_STORE = chroma
+```
+
+5. Expose port `8000` and generate a public domain under **Settings → Networking**.
+6. Use that domain as `NEXT_PUBLIC_API_URL` in Vercel.
+
+---
+
+### Option C — All-in-one on Fly.io
+
+Fly.io can run the whole stack on a single machine with one command.
+
+```bash
+curl -L https://fly.io/install.sh | sh
+
+cd luminal
+fly launch                  # generates fly.toml from docker-compose
+fly secrets set \
+  DATABASE_URL=postgresql+asyncpg://... \
+  REDIS_URL=redis://... \
+  SECRET_KEY=$(openssl rand -hex 32)
+
+fly deploy
+```
+
+---
+
+## ✅ Production checklist
+
+Before pointing real traffic at a Luminal instance:
+
+| Setting | Why |
+|---|---|
+| `SECRET_KEY` | Long random string: `openssl rand -hex 32` |
+| `DATABASE_URL` | Postgres — SQLite is dev-only |
+| `REDIS_URL` | Required for response cache & rate limits |
+| `NEXT_PUBLIC_API_URL` | Must match backend public URL, no trailing slash |
+| `ALLOWED_ORIGINS` | CORS — add your real frontend domain |
+| `DEBUG=false` | Turn off debug output |
+| `APP_ENV=production` | Enables stricter validation |
+| Provider keys | Add at least one via dashboard Settings, or paste in `.env` |
+| Change `admin` password | First thing after first login |
+| HTTPS | Put Caddy / nginx / Cloudflare in front |
+| Backups | Schedule `pg_dump` of Postgres if self-hosted |
+
+---
+
+## 🧪 Verifying your install
+
+After starting everything:
+
+```bash
+# Backend health check
+curl http://localhost:8000/
+
+# Login (use default creds or what you set)
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@admin.com","password":"admin"}'
+
+# Send a prompt
+curl -X POST http://localhost:8000/route \
+  -H "Authorization: Bearer <JWT-from-login>" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"What is the capital of France?"}'
+```
+
+If the first prompt comes back with a model answer and shows up under Dashboard → Recent Logs, you're fully wired up. 🎉
+
+---
+
 ## Phases and Subtasks
 
 ### Phase 1: Core Gateway & Basic Routing

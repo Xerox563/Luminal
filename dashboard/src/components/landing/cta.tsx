@@ -188,7 +188,7 @@ export function LandingCta({ onCta }: { onCta: () => void }) {
                 <ArrowRight size={15} />
     </motion.button>
               <motion.a
-                href="#docs"
+                href="/docs"
                 whileHover={{ scale: 1.04, y: -2 }}
                 whileTap={{ scale: 0.97 }}
                 style={{

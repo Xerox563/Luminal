@@ -231,7 +231,7 @@ export function LandingDocs() {
                   cursor: "pointer",
                 }}
               >
-                Read in docs <ArrowRight size={12} />
+                <a href="/docs" style={{"display": "flex", "alignItems": "center", "gap": 6, "color": "#e4e4e7", "fontSize": 12.5, "fontWeight": 600, "textDecoration": "none", "transition": "color 0.2s"}}>Read in docs <ArrowRight size={12} /></a>
       </div>
     </motion.div>
           ))}
