@@ -236,7 +236,7 @@ export function LandingPipeline() {
             style={{
               position: "absolute",
               left: "50%",
-              top: "useTransform",
+              top: lineHeight,
               width: 14,
               height: 14,
               borderRadius: "50%",

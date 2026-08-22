@@ -13,33 +13,29 @@ const DOC_CARDS = [
     color: "#a78bfa",
     code: `{
   "prompt": "Explain quantum entanglement",
-  "session_id": null,
-  "max_cost": 0.05
+  "session_id": null
 }`,
   },
   {
     icon: Webhook,
-    title: "GET /route/trace",
+    title: "GET /route/trace/{session_id}",
     body: "Server-sent events stream every LangGraph node decision live — same view as the dashboard terminal.",
     color: "#60a5fa",
-    code: `event: node
-data: {"node":"retrieve","chunks":4}
+    code: `data: {"node":"retrieve","action":"complete",
+  "data":{"used_rag":true,"chunks":4}}
 
-event: node
-data: {"node":"route","tier":"medium"}`,
+data: {"node":"route","action":"complete",
+  "data":{"model":"...","provider":"..."}}`,
   },
   {
     icon: Code2,
-    title: "First-class SDK",
-    body: "Official Python client. OpenAI-compatible drop-in. Auth via lum_ API keys created from the dashboard.",
+    title: "Plain HTTP, no SDK required",
+    body: "Auth via lum_ API keys created from the dashboard. Call it from anywhere with a Bearer token — curl, Python, JS, whatever.",
     color: "#34d399",
-    code: `from luminal import Client
-
-c = Client(api_key="lum_...")
-resp = c.route(
-  prompt="Why is JWT sub a string?"
-)
-print(resp.text)`,
+    code: `curl -X POST http://localhost:8000/route \\
+  -H "Authorization: Bearer lum_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"prompt": "Why is JWT sub a string?"}'`,
   },
 ];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Github, Sparkles, Terminal } from "lucide-react";
+import { ArrowRight, BookOpen, Sparkles, Terminal } from "lucide-react";
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 
@@ -112,7 +112,7 @@ export function LandingCta({ onCta }: { onCta: () => void }) {
               }}
             >
               <Sparkles size={11} color="#c4b5fd" />
-              Self-hosted. Free. Open-source.
+              Self-hosted. Runs on your own infra.
     </motion.div>
 
             <h2
@@ -149,8 +149,8 @@ export function LandingCta({ onCta }: { onCta: () => void }) {
                 lineHeight: 1.7,
               }}
             >
-              Clone the repo, run one command, and start routing every prompt through
-              Luminal in under five minutes.
+              Clone the repo, start the FastAPI backend and the dashboard, drop in your
+              provider keys, and start routing every prompt through Luminal.
   </p>
 
             <div
@@ -208,7 +208,7 @@ export function LandingCta({ onCta }: { onCta: () => void }) {
                   fontFamily: "inherit",
                 }}
               >
-                <Github size={15} />
+                <BookOpen size={15} />
                 Read the docs
     </motion.a>
   </div>

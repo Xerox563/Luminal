@@ -140,7 +140,7 @@ export function LandingRag() {
             >
               Drop PDFs, Markdown, or text. Luminal chunks, embeds, and indexes them
               into Chroma, Pinecone, or Weaviate. Top-k chunks are injected into the
-              prompt with inline citations — never hallucinated.
+              prompt with inline citations, so answers are grounded in your own docs.
        </p>
             <ul
               style={{
@@ -155,7 +155,7 @@ export function LandingRag() {
               {[
                 "Keyword + embedding hybrid search",
                 "Live ingestion from the dashboard",
-                "Citation traces in every response",
+                "Citations included whenever RAG is triggered",
                 "Pluggable vector stores",
               ].map((t, i) => (
                 <motion.li

@@ -55,7 +55,7 @@ const FEATURES = [
     icon: Shield,
     title: "Budget-aware routing",
     body:
-      "At 80% spend Luminal downgrades one tier. At 95% it pins the cheapest model. Hard cap or per-call soft cap — your choice.",
+      "At 80% spend Luminal downgrades one tier. At 95% it pins the cheapest model. Go over your monthly budget and requests are rejected until it resets.",
     accent: "#fbbf24",
     glow: "rgba(251,191,36,0.35)",
     span: 1,
@@ -64,7 +64,7 @@ const FEATURES = [
     icon: Sparkles,
     title: "Self-healing generation",
     body:
-      "Critic scores every reply and regenerates if quality drops. Errors trigger recovery with adjusted temperature or disabled RAG.",
+      "A critic model scores cloud replies and regenerates if quality drops (local Ollama responses skip scoring). Errors trigger recovery with adjusted temperature or disabled RAG.",
     accent: "#f0abfc",
     glow: "rgba(217,70,239,0.35)",
     span: 2,

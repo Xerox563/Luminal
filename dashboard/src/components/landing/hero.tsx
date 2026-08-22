@@ -107,7 +107,7 @@ export function LandingHero({ onCta }: { onCta: () => void }) {
               NEW
           </span>
             <span>
-              Luminal now routes across <b style={{ color: "#c4b5fd" }}>5 providers</b> with budget-aware fallbacks
+              Luminal now routes across <b style={{ color: "#c4b5fd" }}>8 providers</b> with budget-aware fallbacks
           </span>
             <Sparkles size={13} color="#c4b5fd" />
         </motion.div>
@@ -247,8 +247,8 @@ export function LandingHero({ onCta }: { onCta: () => void }) {
             }}
           >
             {[
-              { icon: <Zap size={12} />, label: "Sub-200ms routing" },
-              { icon: <Cpu size={12} />, label: "5 live providers" },
+              { icon: <Zap size={12} />, label: "Live SSE trace" },
+              { icon: <Cpu size={12} />, label: "8 live providers" },
               { icon: <GitBranch size={12} />, label: "LangGraph pipeline" },
               { icon: <Gauge size={12} />, label: "Budget-aware" },
             ].map((t, i) => (
@@ -289,7 +289,7 @@ function HeroTerminal() {
     { tag: "·", color: "#60a5fa", text: "analyze   ·  complexity=0.62  (heuristic + llm-judge)" },
     { tag: "·", color: "#34d399", text: "retrieve  ·  4 chunks matched (chroma)" },
     { tag: "·", color: "#fbbf24", text: "tool      ·  none required" },
-    { tag: "·", color: "#f472b6", text: "route     ·  tier=medium  →  mistral-7b (openrouter)" },
+    { tag: "·", color: "#f472b6", text: "route     ·  tier=medium  →  mistral-medium-latest (mistral)" },
     { tag: "·", color: "#60a5fa", text: "generate  ·  312 tok in / 184 tok out  ·  $0.00018" },
     { tag: "·", color: "#34d399", text: "critic    ·  score=0.91  ✓ no regeneration" },
     { tag: "✓", color: "#22c55e", text: "200 OK in 423ms   budget left: $87.42 / $100" },

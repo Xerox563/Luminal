@@ -2,53 +2,54 @@
 
 import { motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "framer-motion";
 import { useEffect, useRef } from "react";
-import { Activity, Clock, Coins, Cpu, DollarSign, Zap } from "lucide-react";
+import { Activity, Clock, Coins, Cpu, DollarSign, GitBranch } from "lucide-react";
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 
+// These are real, fixed facts about how Luminal is built (provider count,
+// pipeline node count, budget thresholds, etc.) — not measured production
+// metrics, since Luminal doesn't collect or publish those.
 const METRICS = [
-  {
-    icon: Zap,
-    label: "Avg routing decision",
-    value: 182,
-    suffix: "ms",
-    color: "#fbbf24",
-    glow: "rgba(251,191,36,0.35)",
-    decimals: 0,
-  },
-  {
-    icon: DollarSign,
-    label: "Avg cost per request",
-    value: 0.0008,
-    prefix: "$",
-    color: "#34d399",
-    glow: "rgba(52,211,153,0.35)",
-    decimals: 4,
-  },
-  {
-    icon: Activity,
-    label: "Pipeline success rate",
-    value: 99.4,
-    suffix: "%",
-    color: "#60a5fa",
-    glow: "rgba(56,189,248,0.35)",
-    decimals: 1,
-  },
   {
     icon: Cpu,
     label: "Providers supported",
-    value: 5,
+    value: 8,
     color: "#a78bfa",
     glow: "rgba(139,92,246,0.35)",
     decimals: 0,
   },
   {
-    icon: Coins,
-    label: "Tokens / sec throughput",
-    value: 1280,
-    suffix: " tok/s",
+    icon: GitBranch,
+    label: "Pipeline stages",
+    value: 8,
     color: "#f472b6",
     glow: "rgba(236,72,153,0.35)",
+    decimals: 0,
+  },
+  {
+    icon: Activity,
+    label: "Budget downgrade threshold",
+    value: 80,
+    suffix: "%",
+    color: "#60a5fa",
+    glow: "rgba(56,189,248,0.35)",
+    decimals: 0,
+  },
+  {
+    icon: DollarSign,
+    label: "Cheapest-model failsafe",
+    value: 95,
+    suffix: "%",
+    color: "#34d399",
+    glow: "rgba(52,211,153,0.35)",
+    decimals: 0,
+  },
+  {
+    icon: Coins,
+    label: "Vector store backends",
+    value: 3,
+    color: "#fbbf24",
+    glow: "rgba(251,191,36,0.35)",
     decimals: 0,
   },
   {
@@ -256,11 +257,6 @@ function MetricCard({
           gap: 4,
         }}
       >
-        {metric.prefix && (
-          <span style={{ fontSize: 22, color: metric.color, fontWeight: 600 }}>
-            {metric.prefix}
-    </span>
-        )}
         <motion.span
           style={{
             fontSize: "clamp(36px, 4vw, 48px)",
